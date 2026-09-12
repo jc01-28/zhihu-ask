@@ -1,0 +1,126 @@
+{
+  "hits": [
+    {
+      "title": "从大厂 Senior PM 到 50 人 AI 创业公司产品负责人，我踩过的三个坑",
+      "contentType": "Answer",
+      "contentId": "fixture-1001",
+      "contentText": "三年前我在一家头部大厂做到 Senior 产品经理，带两条业务线。当时的处境是：晋升通道明显收窄，往上一个台阶至少要等两年，而且做的事越来越像流程管理。一家 50 人左右的 AI 创业公司找我做产品负责人，固定薪资降了 20%，给期权，要带一个 6 人团队。我最后接了。现在回头看，当时判断对的地方是我先问了自己三个问题：第一，我未来三年的能力增长在哪里，大厂还能给我多少；第二，降薪 20% 之后我的现金流能不能扛住 18 个月，我算过房贷和家庭开支，答案是能；第三，我到底是想做管理者还是想做更大的事——后来发现这两件事在早期公司里根本分不开。踩的坑是，我以为管理经验可以平移，实际上从 6 人小团队到跨职能协作，每天要花一半时间在信息同步上，前三个月我几乎没写出过一份完整的产品方案。",
+      "url": "https://www.zhihu.com/answer/fixture-1001",
+      "commentCount": 41,
+      "voteUpCount": 862,
+      "authorName": "林一舟",
+      "authorAvatar": "",
+      "authorBadgeText": "互联网行业 产品经理",
+      "editTime": 1735689600,
+      "comments": ["降薪20%扛18个月这个算法很实用", "关键还是家里能不能兜住"],
+      "authorityLevel": 3,
+      "rankingScore": 0.93
+    },
+    {
+      "title": "拿到创业公司 Offer 但降薪，我用一张表做了决定",
+      "contentType": "Article",
+      "contentId": "fixture-1002",
+      "contentText": "去年从一家外企转到一家 A 轮的 AI 公司，降薪 15%。我没有凭感觉选，而是列了一张表：左边是钱，右边是成长。钱这一栏我算了三件事：固定薪资的绝对下降、期权的期望值（按最保守的估值和 4 年成熟算，几乎可以忽略）、还有隐性成本（通勤、加班带来的生活成本）。成长这一栏我算了三件事：我会不会接触到我以前碰不到的问题、我的直接上级我愿不愿意跟他学三年、以及这份经历三年后能不能让我有第二条路。最后我选了去。一年下来最大的体会是：如果只是为了逃离现在的环境，去哪里都会后悔；如果是清楚地知道要换什么，那降薪是可以接受的代价。同期我有个朋友也跳了，他是为了逃离，半年就走了。",
+      "url": "https://zhuanlan.zhihu.com/p/fixture-1002",
+      "commentCount": 28,
+      "voteUpCount": 534,
+      "authorName": "苏明远",
+      "authorAvatar": "",
+      "authorBadgeText": "",
+      "editTime": 1738368000,
+      "comments": ["逃离型跳槽 vs 目标型跳槽 这个区分太准了"],
+      "authorityLevel": 2,
+      "rankingScore": 0.88
+    },
+    {
+      "title": "IC 转管理的头一年，我犯的最大错误是继续自己干活",
+      "contentType": "Answer",
+      "contentId": "fixture-1003",
+      "contentText": "我是从高级工程师转的技术管理。前六个月我一直在用写代码来获得安全感，结果是两件事都没做好：团队的活我抢了一部分，别人没有成长；我自己的管理动作又只是开周会、写周报。后来我的上级跟我讲了一句话，他说你的产出现在等于团队的产出，你写得再多也只占一份。我才开始把时间重新分配：每周固定留出时间做一对一，把人放在具体项目上而不是我来兜底。转管理最关键的不是学会怎么管别人，是先接受自己不再是那个靠手艺吃饭的人，这个过程比想象中痛苦。要说该不该接管理岗，我的建议是先看你的直接上级有没有时间带你，如果没有，你会成长得非常慢。",
+      "url": "https://www.zhihu.com/answer/fixture-1003",
+      "commentCount": 33,
+      "voteUpCount": 1180,
+      "authorName": "周叙",
+      "authorAvatar": "",
+      "authorBadgeText": "技术管理",
+      "editTime": 1730419200,
+      "comments": ["产出等于团队产出，这句话我记下了"],
+      "authorityLevel": 4,
+      "rankingScore": 0.91
+    },
+    {
+      "title": "关于职业选择，我的一些通用看法",
+      "contentType": "Answer",
+      "contentId": "fixture-1004",
+      "contentText": "职业选择本质上是一个资源配置问题。我的观点是，年轻人应该优先选择那些能带来复利的位置：行业上行、组织在扩张、上级愿意带人。至于具体是大厂还是创业公司，我认为这不是关键变量，关键是你在其中扮演的角色是不是在变重。有些人去了大厂做螺丝钉，有些人去了大厂做核心项目，结果完全不同。同理，创业公司也有把人当消耗品的。所以我的建议是不要用公司标签做判断，要用具体岗位的信息密度做判断。",
+      "url": "https://www.zhihu.com/answer/fixture-1004",
+      "commentCount": 12,
+      "voteUpCount": 96,
+      "authorName": "陆文康",
+      "authorAvatar": "",
+      "authorBadgeText": "",
+      "editTime": 1725148800,
+      "comments": [],
+      "authorityLevel": 1,
+      "rankingScore": 0.62
+    },
+    {
+      "title": "35 岁转岗 AI 产品：非科班的转型路径复盘",
+      "contentType": "Article",
+      "contentId": "fixture-1005",
+      "contentText": "35 岁那年我从传统软件的产品岗转到 AI 产品岗。转的过程分三步：第一步是先在公司内部找 AI 相关的项目蹭进去，哪怕只是做支持；第二步是把一个 AI 项目从头到尾做完，有了可讲的东西；第三步才是往外看机会。我投了二十多家，最后去的那家公司其实是因为我在面试里讲清楚了我做过的那个 AI 项目里踩的坑。转岗最难的其实不是技术，是你要接受自己在新领域是个新人，和我同期进来的一个 24 岁同事在模型能力上比我懂得多得多。如果你也是非科班转 AI，我的建议是把 AI 当作一个具体项目来学，别从原理学起。",
+      "url": "https://zhuanlan.zhihu.com/p/fixture-1005",
+      "commentCount": 19,
+      "voteUpCount": 421,
+      "authorName": "郝知远",
+      "authorAvatar": "",
+      "authorBadgeText": "AI 产品",
+      "editTime": 1733011200,
+      "comments": ["从公司内部蹭项目这个思路很实在"],
+      "authorityLevel": 3,
+      "rankingScore": 0.85
+    },
+    {
+      "title": "大厂晋升放缓是不是就应该走？",
+      "contentType": "Answer",
+      "contentId": "fixture-1006",
+      "contentText": "先说结论：晋升放缓本身不构成离职理由。我见过很多人在晋升卡住的第二年出去，结果发现新环境里卡住的原因是别的。判断标准应该是看你的能力曲线还有没有在涨。如果虽然没升职，但你手上的项目难度在提升、你能接触到的人层级在提升，那其实你还在增值。真正应该走的时候是：你已经能预判未来两年的工作内容，并且那些内容不能让你变得更强。我自己是在大厂待了六年之后离开的，走的时候我的判断是这条能力曲线平了。",
+      "url": "https://www.zhihu.com/answer/fixture-1006",
+      "commentCount": 22,
+      "voteUpCount": 305,
+      "authorName": "沈亦航",
+      "authorAvatar": "",
+      "authorBadgeText": "",
+      "editTime": 1727740800,
+      "comments": ["能力曲线这个标准比晋升快慢实用"],
+      "authorityLevel": 2,
+      "rankingScore": 0.79
+    }
+  ],
+  "followees": [
+    {
+      "fullname": "周叙",
+      "urlToken": "zhou-xu",
+      "url": "https://www.zhihu.com/people/zhou-xu",
+      "avatarUrl": "",
+      "headline": "技术管理 / 前大厂技术负责人",
+      "followerCount": 18400
+    },
+    {
+      "fullname": "沈亦航",
+      "urlToken": "shen-yi-hang",
+      "url": "https://www.zhihu.com/people/shen-yi-hang",
+      "avatarUrl": "",
+      "headline": "写点职业选择",
+      "followerCount": 3200
+    }
+  ],
+  "hotList": [
+    {
+      "title": "如何看待 AI 让知识获取成本趋近于零？",
+      "url": "https://www.zhihu.com/question/fixture-hot-1",
+      "summary": "讨论 AI 对知识社区的影响"
+    }
+  ],
+  "myContents": []
+}

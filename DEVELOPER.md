@@ -2,6 +2,7 @@
 
 > 面向本项目开发者（我 + 队友）。目标：**看完这一份就能安全地改代码，不踩已经踩过的坑。**
 > 产品向的介绍看 [README.md](README.md)，当前进度与排期看 [docs/STATUS.md](docs/STATUS.md)。
+> 如果你是用 AI 编码助手（Codex / Claude Code）改这个仓库，让助手先读 **[AGENT.md](AGENT.md)** —— 那里是给机器看的硬约束。
 
 ---
 

@@ -35,7 +35,7 @@ export function LandingPage() {
               问
             </span>
             <div>
-              <p className="text-base font-bold tracking-tight">知乎问人</p>
+              <p className="text-base font-bold tracking-tight">知域</p>
               <p className="text-xs text-muted-foreground">找到真正经历过的人</p>
             </div>
           </div>
@@ -56,7 +56,7 @@ export function LandingPage() {
             <span className="text-primary">找到值得问的人。</span>
           </h1>
           <p className="mt-6 max-w-xl text-base leading-8 text-muted-foreground sm:text-lg">
-            知乎问人把「找人」拆成两条路：按专业领域浏览议题与人物聚类，
+            知域把「找人」拆成两条路：按专业领域浏览议题与人物聚类，
             或者直接描述你的处境，让检索 Agent 从知乎公开内容里找出真正经历过的人，
             并给出可核验的证据与可解释的推荐理由。
           </p>

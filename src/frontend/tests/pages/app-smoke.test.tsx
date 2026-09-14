@@ -7,7 +7,7 @@ describe("应用骨架", () => {
   it("默认以 Mock 模式启动并渲染项目推荐页", async () => {
     render(<App />);
 
-    expect(await screen.findByText("知乎问人")).toBeInTheDocument();
+    expect(await screen.findByText("知域")).toBeInTheDocument();
     expect(screen.getByText("找到真正经历过的人")).toBeInTheDocument();
     expect(screen.getByText("知乎黑客松 Demo")).toBeInTheDocument();
   });

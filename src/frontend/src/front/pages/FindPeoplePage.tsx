@@ -62,7 +62,7 @@ export function FindPeoplePage({ session }: { session: AuthSessionView }) {
           name: "start_person_search",
           title: "搜索相关人物",
           description:
-            "在知乎问人中搜索与指定职业决策问题相关的人物，并把结果展示在当前页面。",
+            "在知域中搜索与指定职业决策问题相关的人物，并把结果展示在当前页面。",
           inputSchema: {
             type: "object",
             properties: { query: { type: "string", minLength: 4, maxLength: 300 } },

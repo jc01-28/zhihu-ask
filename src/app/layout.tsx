@@ -12,7 +12,7 @@ import type { Metadata } from 'next';
  * 别往这里加全局样式或页面组件 —— 那会让人误以为 Next 还在承担界面职责。
  */
 export const metadata: Metadata = {
-  title: '知乎问人 · 找到真正经历过的人',
+  title: '知域 · 找到真正经历过的人',
   description: '从知乎真实内容中寻找有相似经历、值得进一步交流的人。',
 };
 

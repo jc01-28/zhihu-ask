@@ -29,7 +29,7 @@ export function AppHeader({ session }: { session: AuthSessionView }) {
           </span>
           <span className="hidden sm:block">
             <span className="block text-base font-bold leading-tight tracking-tight">
-              知乎问人
+              知域
             </span>
             <span className="block text-xs text-muted-foreground">找到真正经历过的人</span>
           </span>

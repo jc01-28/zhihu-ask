@@ -8,6 +8,7 @@ import { Badge } from "@/front/components/ui/badge";
 import { Button } from "@/front/components/ui/button";
 import { Skeleton } from "@/front/components/ui/skeleton";
 import { useApiClient } from "@/front/app/api-context";
+import { ApiError } from "@/front/api/ApiError";
 import { CreatorDetail } from "@/front/features/creator/CreatorDetail";
 import { FieldTopicFilter } from "@/front/features/field-graph/FieldTopicFilter";
 import { FieldGraph } from "@/front/features/field-graph/FieldGraph";
@@ -91,7 +92,7 @@ export function FieldGraphPage({ session }: { session: AuthSessionView }) {
             caught instanceof Error
               ? caught.message
               : "无法加载这个人的公开资料，请稍后重试。",
-          retryable: true,
+          retryable: caught instanceof ApiError ? caught.retryable : true,
           person,
         });
       } finally {

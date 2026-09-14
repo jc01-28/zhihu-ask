@@ -49,9 +49,16 @@ describe("HttpApiClient", () => {
   it("每个请求都带 credentials: include 并做响应校验", async () => {
     const { client, fetchImpl } = createClient(async () =>
       jsonResponse({
-        configured: true,
-        authenticated: true,
-        user: { id: "u-1", displayName: "演示用户", avatarUrl: null },
+        status: "success",
+        data: {
+          configured: true,
+          authenticated: true,
+          user: {
+            name: "演示用户",
+            avatarUrl: null,
+            url: "https://www.zhihu.com/people/demo-user",
+          },
+        },
       }),
     );
 
@@ -66,7 +73,7 @@ describe("HttpApiClient", () => {
   it("非 2xx 使用错误信封构造 ApiError", async () => {
     const { client } = createClient(async () =>
       jsonResponse(
-        { code: API_ERROR_CODES.rateLimited, message: "请求过于频繁", retryable: true },
+        { error: "请求过于频繁", hint: "请稍后再试。" },
         { status: 429 },
       ),
     );
@@ -75,6 +82,7 @@ describe("HttpApiClient", () => {
       code: API_ERROR_CODES.rateLimited,
       status: 429,
       retryable: true,
+      message: "请求过于频繁 请稍后再试。",
     });
   });
 
@@ -93,41 +101,40 @@ describe("HttpApiClient", () => {
   // 这条链路有两个静默失效点：信封的 `.strict()` 不认 `details`（整个信封解析
   // 失败 → code 退化成 CONFLICT），以及 `send()` 不把它转进 ApiError。
   // 两者都不会报错，只会让回正在真实后端下永不触发，所以各钉一条断言。
-  it("错误信封里的 details 原样交给上层（咨询 409 靠它回正）", async () => {
-    const serverConsultation = {
-      id: "consultation-server",
+  it("咨询动作走真实接口并校验响应", async () => {
+    const systemMessage = {
+      id: "message-system",
+      conversationId: "conversation-1",
+      clientMessageId: null,
+      sender: "system",
+      content: "已进入咨询",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    const consultation = {
+      id: "consultation-1",
       status: "mock_paid",
       packageId: "voice-30",
       amount: 19900,
       updatedAt: "2026-01-01T00:00:00.000Z",
-    };
-    const { client } = createClient(
-      async () =>
-        jsonResponse(
-          {
-            code: API_ERROR_CODES.invalidConsultationTransition,
-            message: "当前状态不允许这个操作。",
-            retryable: false,
-            details: serverConsultation,
-          },
-          { status: 409 },
-        ),
+    } as const;
+    const { client, fetchImpl } = createClient(async () =>
+      jsonResponse({ consultation, systemMessage }),
     );
 
-    const error = await client
-      .applyConsultationAction("c-1", {
-        action: "confirm_mock_payment",
-        actorRole: "seeker",
-      })
-      .catch((caught: unknown) => caught);
+    const result = await client.applyConsultationAction("conversation-1", {
+      action: "confirm_mock_payment",
+      actorRole: "seeker",
+    });
 
-    expect(error).toBeInstanceOf(ApiError);
-    // code 必须是精确码，不能退化成按状态码推断的 CONFLICT。
-    expect((error as ApiError).code).toBe(
-      API_ERROR_CODES.invalidConsultationTransition,
+    expect(result.consultation).toEqual(consultation);
+    expect(result.systemMessage).toEqual(systemMessage);
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      "/api/conversations/conversation-1/consultation/actions",
     );
-    expect((error as ApiError).status).toBe(409);
-    expect((error as ApiError).details).toEqual(serverConsultation);
+    expect(JSON.parse(String(fetchImpl.mock.calls[0][1]?.body))).toEqual({
+      action: "confirm_mock_payment",
+      actorRole: "seeker",
+    });
   });
 
   it("信封里出现未声明的字段时按状态码兜底，不静默吸收", async () => {
@@ -165,7 +172,7 @@ describe("HttpApiClient", () => {
       onUnauthorized,
     );
 
-    await expect(client.getConversation("c-1")).rejects.toMatchObject({ status: 401 });
+    await expect(client.getFieldGraph("c-1")).rejects.toMatchObject({ status: 401 });
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
@@ -203,22 +210,26 @@ describe("HttpApiClient", () => {
   });
 
   it("响应结构不符合契约时抛出 INVALID_RESPONSE", async () => {
-    const { client } = createClient(async () => jsonResponse({ configured: true }));
+    const { client } = createClient(async () =>
+      jsonResponse({ status: "success", data: { configured: true } }),
+    );
 
     await expect(client.getSession()).rejects.toMatchObject({
       code: API_ERROR_CODES.invalidResponse,
     });
   });
 
-  it("listMessages 携带 limit 与 cursor", async () => {
+  it("聊天消息列表走真实接口并带游标", async () => {
     const { client, fetchImpl } = createClient(async () =>
       jsonResponse({ items: [], nextCursor: null }),
     );
 
-    await client.listMessages("conversation-1", "12");
-
-    expect(String(fetchImpl.mock.calls[0][0])).toBe(
-      "/api/conversations/conversation-1/messages?limit=50&cursor=12",
+    await expect(client.listMessages("conversation-1", "12")).resolves.toEqual({
+      items: [],
+      nextCursor: null,
+    });
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      "/api/conversations/conversation-1/messages?cursor=12&limit=50",
     );
   });
 
@@ -256,6 +267,50 @@ describe("HttpApiClient", () => {
     ]);
   });
 
+  it("适配后端一次性 JSON 信封，并合成前端六阶段事件", async () => {
+    const { client, fetchImpl } = createClient(async () =>
+      jsonResponse({
+        status: "success",
+        data: {
+          runId: "backend-run-1",
+          recommendations: [],
+          contentOnly: [],
+          profile: { searchQueries: ["转型"] },
+          metrics: { hitCount: 0, eventCount: 0, noEvidenceRate: 0 },
+        },
+      }),
+    );
+    const events: SearchAgentEvent[] = [];
+
+    const completed = await client.streamSearch(
+      { query: "大厂产品转 AI 创业公司", sessionId: "s-1" },
+      (event) => events.push(event),
+    );
+
+    expect(completed.result).toMatchObject({
+      cards: [],
+      modeUsed: "live",
+      persistence: "unavailable",
+      runId: null,
+      searchedQueries: ["转型"],
+    });
+    expect(events.map((event) => event.type)).toEqual([
+      "run.started",
+      "step.completed",
+      "step.completed",
+      "step.completed",
+      "step.completed",
+      "step.completed",
+      "step.completed",
+      "run.completed",
+    ]);
+    expect(JSON.parse(String(fetchImpl.mock.calls[0][1]?.body))).toEqual({
+      query: "大厂产品转 AI 创业公司",
+      sessionId: "s-1",
+      mode: "auto",
+    });
+  });
+
   it("run.failed 事件被转换成 ApiError 抛出", async () => {
     const { client } = createClient(async () =>
       ndjsonResponse([
@@ -276,38 +331,38 @@ describe("HttpApiClient", () => {
     ).rejects.toMatchObject({ code: API_ERROR_CODES.rateLimited, retryable: true });
   });
 
-  it("createConversation 只提交 creatorId 与 sourceRunId", async () => {
+  it("创建聊天会话走真实接口并解包 conversation", async () => {
+    const conversation = {
+      id: "conversation-1",
+      user: { id: "u-1", displayName: "演示用户", avatarUrl: null },
+      creator: FIXTURE_CREATORS[0],
+      sourceRunId: runId,
+      consultation: {
+        id: "consultation-1",
+        status: "free_chat",
+        packageId: null,
+        amount: null,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
     const { client, fetchImpl } = createClient(async () =>
-      jsonResponse({
-        conversation: {
-          id: "conversation-1",
-          user: { id: "u-1", displayName: "演示用户", avatarUrl: null },
-          creator: FIXTURE_CREATORS[0],
-          sourceRunId: runId,
-          consultation: {
-            id: "consultation-1",
-            status: "free_chat",
-            packageId: "voice-30",
-            amount: null,
-            updatedAt: "2026-01-01T00:00:00.000Z",
-          },
-          createdAt: "2026-01-01T00:00:00.000Z",
-          updatedAt: "2026-01-01T00:00:00.000Z",
-        },
-      }),
+      jsonResponse({ conversation }),
     );
 
-    const conversation = await client.createConversation({
+    await expect(
+      client.createConversation({
+        creatorId: FIXTURE_CREATORS[0].id,
+        sourceRunId: runId,
+      }),
+    ).resolves.toEqual(conversation);
+    expect(fetchImpl.mock.calls[0][0]).toBe("/api/conversations");
+    expect(JSON.parse(String(fetchImpl.mock.calls[0][1]?.body))).toEqual({
       creatorId: FIXTURE_CREATORS[0].id,
       sourceRunId: runId,
     });
 
-    expect(conversation.id).toBe("conversation-1");
-    const init = fetchImpl.mock.calls[0][1];
-    expect(JSON.parse(String(init.body))).toEqual({
-      creatorId: FIXTURE_CREATORS[0].id,
-      sourceRunId: runId,
-    });
   });
 
   it("网络错误被收敛成 NETWORK_ERROR", async () => {

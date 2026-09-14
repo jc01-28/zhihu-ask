@@ -27,6 +27,8 @@ node_modules/
 .next/
 out/
 build/
+dist/
+dev-dist/
 *.tsbuildinfo
 next-env.d.ts
 
@@ -35,6 +37,8 @@ next-env.d.ts
 #     绝对不要用 `*.json` 这类通配规则把它扫进来。
 .cache/
 .artifacts/
+.vite/
+.turbo/
 
 # ── 内部资料：不随仓库发布 ─────────────────────────────────────────────
 # 交接说明、进度排期、团队内部决策记录等。
@@ -54,9 +58,28 @@ internal/
 .env
 .env.local
 .env.*.local
+*.local
 !.env.example
+
+# ── 测试与覆盖率产物 ───────────────────────────────────────────────────
+coverage/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
 
 # ── 杂项 ───────────────────────────────────────────────────────────────
 *.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+.eslintcache
 .DS_Store
 Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+*.tmp
+*.temp

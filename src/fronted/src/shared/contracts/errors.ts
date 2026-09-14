@@ -52,6 +52,7 @@ export const API_ERROR_CODES = {
   invalidResponse: "INVALID_RESPONSE",
   networkError: "NETWORK_ERROR",
   unknown: "UNKNOWN_ERROR",
+  backendUnsupported: "BACKEND_UNSUPPORTED",
 } as const;
 
 export type ApiErrorCode =

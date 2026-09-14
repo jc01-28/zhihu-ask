@@ -10,8 +10,6 @@ import {
 } from "@/shared/contracts/field";
 import { FIELD_SUMMARIES, findFieldGraph } from "@/front/mocks/field-data";
 
-const FEATURED = { items: FIELD_SUMMARIES };
-
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
@@ -37,7 +35,9 @@ function createMockClient(options: ConstructorParameters<typeof MockApiClient>[0
 
 describe("HttpApiClient · 领域接口", () => {
   it("推荐领域走 /api/fields/featured 并逐项通过契约", async () => {
-    const { client, fetchImpl } = createHttpClient(async () => jsonResponse(FEATURED));
+    const { client, fetchImpl } = createHttpClient(async () =>
+      jsonResponse({ status: "success", data: FIELD_SUMMARIES }),
+    );
 
     const fields = await client.getFeaturedFields();
 
@@ -51,7 +51,10 @@ describe("HttpApiClient · 领域接口", () => {
 
   it("领域检索把 query 与 limit 编码进查询串，返回领域列表", async () => {
     const { client, fetchImpl } = createHttpClient(async () =>
-      jsonResponse({ items: [FIELD_SUMMARIES[0]] }),
+      jsonResponse({
+        status: "success",
+        data: { fields: [FIELD_SUMMARIES[0]], total: 1 },
+      }),
     );
 
     const fields = await client.searchFields("Agent 开发", 3);
@@ -78,14 +81,13 @@ describe("HttpApiClient · 领域接口", () => {
       if (String(url).includes("missing")) {
         return jsonResponse(
           {
-            code: API_ERROR_CODES.fieldNotFound,
-            message: "这个领域不存在或已下线。",
-            retryable: false,
+            error: "这个领域不存在或已下线。",
+            hint: "请返回领域目录重新选择。",
           },
           { status: 404 },
         );
       }
-      return jsonResponse(graph);
+      return jsonResponse({ status: "success", data: graph });
     });
 
     const loaded = await client.getFieldGraph("agent development");
@@ -95,32 +97,30 @@ describe("HttpApiClient · 领域接口", () => {
     expect(fieldGraphResponseSchema.safeParse(loaded).success).toBe(true);
 
     await expect(client.getFieldGraph("missing")).rejects.toMatchObject({
-      code: API_ERROR_CODES.fieldNotFound,
+      code: API_ERROR_CODES.notFound,
       status: 404,
       retryable: false,
     });
   });
 
-  it("人物公开资料返回 404 时抛错，不会回退到别人", async () => {
+  it("人物公开资料不存在时保留后端 404 语义，而不是伪造资料", async () => {
     const { client } = createHttpClient(async () =>
-      jsonResponse(
-        { code: API_ERROR_CODES.notFound, message: "找不到这个人的公开资料。", retryable: false },
-        { status: 404 },
-      ),
+      jsonResponse({ error: "Not Found" }, { status: 404 }),
     );
 
     await expect(client.getCreator("p-unknown")).rejects.toMatchObject({
       code: API_ERROR_CODES.notFound,
+      status: 404,
     });
   });
 
-  it("领域列表响应的信封结构错误会被契约拦下", async () => {
-    const { client } = createHttpClient(async () => jsonResponse(FIELD_SUMMARIES));
+  it("领域列表缺少数组数据时会被契约拦下", async () => {
+    const { client } = createHttpClient(async () => jsonResponse({ fields: "not-an-array" }));
 
     await expect(client.getFeaturedFields()).rejects.toMatchObject({
       code: API_ERROR_CODES.invalidResponse,
     });
-    expect(fieldListResponseSchema.safeParse(FIELD_SUMMARIES).success).toBe(false);
+    expect(fieldListResponseSchema.safeParse({ fields: "not-an-array" }).success).toBe(false);
   });
 });
 

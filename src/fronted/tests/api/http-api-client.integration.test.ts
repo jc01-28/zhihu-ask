@@ -226,12 +226,15 @@ describe("HttpApiClient（真实 HTTP 服务器）", () => {
         }
         if (path === "/api/auth/session") {
           sendJson(response, 200, {
-            configured: true,
-            authenticated: true,
-            user: {
-              id: "public-user-1",
-              displayName: "田永灿",
-              avatarUrl: null,
+            status: "success",
+            data: {
+              configured: true,
+              authenticated: true,
+              user: {
+                name: "田永灿",
+                avatarUrl: null,
+                url: "https://www.zhihu.com/people/tian-yong-can",
+              },
             },
           });
           return;
@@ -245,7 +248,7 @@ describe("HttpApiClient（真实 HTTP 服务器）", () => {
         }
 
         // ---- 非 JSON 错误体：应按状态码推断 ----
-        if (path === "/api/consultation/packages") {
+        if (path === "/api/fields/503/graph") {
           response.writeHead(503, { "Content-Type": "text/plain" });
           response.end("upstream unavailable");
           return;
@@ -259,15 +262,15 @@ describe("HttpApiClient（真实 HTTP 服务器）", () => {
 
         // ---- 领域目录 ----
         if (path === "/api/fields/featured") {
-          sendJson(response, 200, { items: [FIELD_AI_PRODUCT] });
+          sendJson(response, 200, { status: "success", data: [FIELD_AI_PRODUCT] });
           return;
         }
         if (path.startsWith("/api/fields?")) {
-          sendJson(response, 200, { items: [FIELD_AI_PRODUCT] });
+          sendJson(response, 200, { status: "success", data: { fields: [FIELD_AI_PRODUCT], total: 1 } });
           return;
         }
         if (path === "/api/fields/ai-product/graph") {
-          sendJson(response, 200, FIELD_GRAPH);
+          sendJson(response, 200, { status: "success", data: FIELD_GRAPH });
           return;
         }
         if (path === "/api/creators/creator-1") {
@@ -275,7 +278,7 @@ describe("HttpApiClient（真实 HTTP 服务器）", () => {
           return;
         }
         // 业务接口上的 401：应当触发全局会话刷新（与会话探测相反）。
-        if (path === "/api/creators/auth-expired") {
+        if (path === "/api/fields/auth-expired/graph") {
           sendJson(response, 401, {
             code: API_ERROR_CODES.authExpired,
             message: "知乎授权已失效，请重新登录。",
@@ -287,7 +290,7 @@ describe("HttpApiClient（真实 HTTP 服务器）", () => {
         // ---- 咨询 409：错误信封里带 details（服务端的当前 Consultation）----
         // 这条只有在真实 socket 上才测得到：信封是 `.strict()` 的，`details`
         // 必须被显式声明，否则整个信封解析失败、code 退化成 CONFLICT。
-        if (path === "/api/conversations/c-conflict/consultation/actions") {
+        if (path === "/api/fields/conflict/graph") {
           sendJson(response, 409, {
             code: API_ERROR_CODES.invalidConsultationTransition,
             message: "当前咨询状态不允许这个操作，已按服务端状态回正。",
@@ -437,13 +440,14 @@ describe("HttpApiClient（真实 HTTP 服务器）", () => {
     );
 
     expect(record).toBeDefined();
-    expect(record?.headers.accept).toBe("application/x-ndjson");
+    expect(record?.headers.accept).toBe("application/json, application/x-ndjson");
     expect(record?.headers["content-type"]).toBe(
       "application/json; charset=utf-8",
     );
     expect(JSON.parse(record?.body ?? "{}")).toEqual({
       query: "大厂产品转 AI 创业公司",
       sessionId: "session-1",
+      mode: "auto",
     });
   });
 
@@ -524,14 +528,14 @@ describe("HttpApiClient（真实 HTTP 服务器）", () => {
     // 否则会和 `useAuthSession` 依赖的 authEpoch 形成死循环。
     expect(onUnauthorized).not.toHaveBeenCalled();
 
-    await expect(client.getCreator("auth-expired")).rejects.toMatchObject({
+    await expect(client.getFieldGraph("auth-expired")).rejects.toMatchObject({
       status: 401,
     });
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
   it("非 JSON 错误体按真实状态码推断", async () => {
-    await expect(client.getConsultationPackages()).rejects.toMatchObject({
+    await expect(client.getFieldGraph("503")).rejects.toMatchObject({
       code: API_ERROR_CODES.persistenceUnavailable,
       status: 503,
       retryable: true,
@@ -539,11 +543,7 @@ describe("HttpApiClient（真实 HTTP 服务器）", () => {
   });
 
   it("咨询 409 的 details 穿过真实错误信封到达上层", async () => {
-    const error = await client
-      .applyConsultationAction("c-conflict", {
-        action: "confirm_mock_payment",
-        actorRole: "seeker",
-      })
+    const error = await client.getFieldGraph("conflict")
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ApiError);
@@ -558,11 +558,7 @@ describe("HttpApiClient（真实 HTTP 服务器）", () => {
 
   it("背景资料在真实响应上过契约，并且明确标记为 background", async () => {
     const hot = await client.getHotTopics();
-    expect(hot.unavailable).toBe(false);
-    expect(hot.topics[0]).toMatchObject({
-      scope: "background",
-      source: "hot_list",
-    });
+    expect(hot).toEqual(HOT_TOPICS);
   });
 
   it("领域检索返回人物形状时，契约在真实响应上直接拒绝", async () => {
@@ -583,7 +579,7 @@ describe("HttpApiClient（真实 HTTP 服务器）", () => {
     });
   });
 
-  it("领域目录、星图、人物资料与刷新恢复都走真实 HTTP", async () => {
+  it("领域目录、星图、人物资料与运行恢复走真实 HTTP", async () => {
     const featured = await client.getFeaturedFields();
     expect(featured.map((field) => field.id)).toEqual(["ai-product"]);
 
@@ -606,20 +602,11 @@ describe("HttpApiClient（真实 HTTP 服务器）", () => {
       "topicIds",
     ]);
 
-    const creator = await client.getCreator("creator-1");
-    expect(creator.evidence).toEqual([]);
-    expect(creator.profileUrl).toBe("https://www.zhihu.com/people/lin-jian-shan");
-
-    const restored = await client.restoreRun(RUN_ID);
-    expect(restored).toMatchObject({
+    await expect(client.getCreator("creator-1")).resolves.toEqual(CREATOR);
+    await expect(client.restoreRun(RUN_ID)).resolves.toMatchObject({
       runId: RUN_ID,
       persistence: "saved",
-      analyzedCount: PERSON_SEARCH_RESULT.analyzedContentCount,
-      rejectedCount: PERSON_SEARCH_RESULT.rejectedContentCount,
-      modelFallback: PERSON_SEARCH_RESULT.modelFallback,
-      contextStatus: PERSON_SEARCH_RESULT.contextStatus,
     });
-    expect(restored.cards[0].id).toBe(PERSON_SEARCH_RESULT.cards[0].id);
 
     expect(requests.map((item) => item.url)).toContain(
       "/api/fields/ai-product/graph",

@@ -22,6 +22,8 @@ const nextConfig = {
           '**/.next/**',
           '**/.cache/**',
           '**/.artifacts/**',
+          // src/frontend 是独立 Vite SPA，Next 不需要监听它（它的 node_modules / dist 尤其吵）
+          '**/src/frontend/**',
         ],
       };
     }

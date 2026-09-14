@@ -25,25 +25,44 @@
 
 ## 0. 五分钟上手
 
+> **现在是双进程**：`zhihu-ask` 只出 API（8787），`src/frontend` 才是界面（5173）。
+> 只跑 `npm run dev` 会在 3000 上起旧的 Next 页面 —— 那是过渡态，**不是产品界面**。
+
 ```bash
+# ── 终端 A：后端 API ────────────────────────────────
 npm install
 
 # 零凭证模式：先跑通链路，再补业务
 cp .env.example .env.local
 sed -i 's/^USE_FIXTURES=0/USE_FIXTURES=1/' .env.local
 sed -i "s|^SESSION_SECRET=.*|SESSION_SECRET=$(openssl rand -hex 32)|" .env.local
-npm run dev        # → http://localhost:3000
+npm run dev -- --port 8787
+```
+
+```bash
+# ── 终端 B：前端 SPA（需要 Node ≥ 22.13 + pnpm）──────
+cd src/frontend
+pnpm install
+pnpm dev --mode live      # → http://localhost:5173
 ```
 
 **先打 `/api/health`**，它会告诉你缺什么凭证、数据目录是否可写：
 
 ```bash
-curl -s localhost:3000/api/health | python3 -m json.tool
+curl -s localhost:8787/api/health | python3 -m json.tool
 ```
+
+前端三种跑法：
+
+| 命令 | 说明 |
+|---|---|
+| `pnpm dev --mode live` | **联调用**。请求打相对路径 `/api`，由 Vite 代理到 `VITE_DEV_PROXY_TARGET`（默认 8787）。同源，无跨域，Cookie 正常 |
+| `pnpm dev` | Mock 模式。内置确定性假数据，不需要后端，用来过交互 |
+| `node scripts/live-stub-server.mjs & pnpm dev --mode live` | 不起真后端，用仓库自带桩服务跑通 live 链路 |
 
 | 命令 | 作用 |
 |---|---|
-| `npm run dev` | 开发服务 |
+| `npm run dev` | 后端开发服务 |
 | `npm run typecheck` | 类型检查（提交前必跑） |
 | `npm run build` | 生产构建（提交前必跑） |
 | `npm run e2e` | 集成测试 28 项（fixture + 无 LLM，约 3 秒） |
@@ -63,12 +82,22 @@ curl -s localhost:3000/api/health | python3 -m json.tool
 src/
 ├── app/       Next.js 路由壳 —— 只转发，不放业务
 ├── back/      ★ 后端（主战场）
-├── front/     ★ 前端
+├── front/     旧 Next 页面（过渡态，不是产品界面）
+├── frontend/  ★ 队友的 Vite SPA —— 唯一的用户界面（独立工程）
 └── shared/    ★ 前后端唯一交接点
 ```
 
-`src/app/` 是 Next.js 强制的路由目录，必须存在；但里面**只有壳** ——
-`api/**/route.ts` 把 HTTP 上下文拍平成参数转交 `back/handlers/`，`page.tsx` 转交 `front/pages/`。
+`src/app/` 是 Next.js 强制的路由目录，必须存在；`api/**/route.ts` 把 HTTP 上下文拍平成
+参数转交 `back/handlers/`。Next 侧不再承担界面职责。
+
+> ⚠️ `src/frontend/` 是**独立工程**：自己的 `package.json` / `tsconfig` / `pnpm-lock.yaml`，
+> Tailwind 4 + Vite 8，跟 Next 侧的 Tailwind 3 不是一套。所以根 `tsconfig.json` 把它
+> `exclude` 掉了 —— 否则 `npm run typecheck` 和 `next build` 会拿 Next 的编译选项去检查
+> SPA 代码（`import.meta.env`、`vite/client` 类型），必然报错。SPA 的类型检查进
+> `src/frontend` 跑 `pnpm typecheck`。
+>
+> 它也是**接口形状的事实源**：`src/frontend/src/shared/contracts/*.ts` 全部 zod `.strict()`，
+> 配 `src/frontend/docs/` 下三份文档。改任何响应字段都要回来看这里。
 
 ### 展开
 

@@ -18,5 +18,9 @@
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  // ⚠️ src/frontend 是队友的 Vite SPA（独立的 tsconfig / React 版本 / 构建链）。
+  // 根 tsconfig 必须排除它，否则 npm run typecheck 与 next build 会拿 Next 的
+  // 编译选项去检查 SPA 代码（import.meta.env、vite/client 类型等），必然报错。
+  // SPA 自己的类型检查在 src/frontend 目录下跑：pnpm typecheck。
+  "exclude": ["node_modules", "src/frontend"]
 }

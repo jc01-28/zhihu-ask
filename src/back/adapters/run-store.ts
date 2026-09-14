@@ -18,7 +18,8 @@ import type { PersonSearchResult } from '@/shared/contract';
 /** 保留多久。演示场景两小时足够，也避免磁盘被历史运行堆满。 */
 const RUN_TTL_MS = Number(process.env.RUN_TTL_MS ?? 2 * 60 * 60 * 1000);
 
-const RUNS_SUBDIR = 'runs';
+/** 同 conversation-store：落 `.cache/` 下——既不被 git 扫到，也不触发 dev watcher */
+const RUNS_SUBDIR = path.join('.cache', 'runs');
 
 /** runId 是 uuid。**用它做路径前必须校验** —— 否则 `../` 就能写到目录外。 */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

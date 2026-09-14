@@ -257,9 +257,14 @@ npm run gold:build && npm run eval   # 复现这张表，产出 eval/report.md
 
 ## 自己跑起来
 
-需要 Node.js 18.18+（推荐 20/22）。
+> ⚠️ 现在跑的是**两个进程**：`zhihu-ask` 只提供 API（8787），`src/frontend` 是队友的
+> Vite SPA，是唯一的用户界面（5173）。只起后端的话，3000 端口上仍然是旧的 Next 页面，
+> **那不是我们要演示的产品**。
+
+**环境要求**：后端 Node.js 18.18+；前端 Node.js **≥ 22.13** + pnpm（Vite 8 的硬要求）。
 
 ```bash
+# ── 1) 后端 API（终端 A）────────────────────────────
 git clone <repo-url> && cd zhihu-ask
 npm install
 
@@ -268,10 +273,31 @@ cp .env.example .env.local
 sed -i 's/^USE_FIXTURES=0/USE_FIXTURES=1/' .env.local
 sed -i "s|^SESSION_SECRET=.*|SESSION_SECRET=$(openssl rand -hex 32)|" .env.local
 
-npm run dev        # → http://localhost:3000
+npm run dev -- --port 8787      # → http://localhost:8787/api/health
 ```
 
-打开后点「示例 1」→「开始问人」，就能看到完整链路。
+```bash
+# ── 2) 前端 SPA（终端 B）────────────────────────────
+cd src/frontend
+pnpm install
+pnpm dev --mode live            # → http://localhost:5173
+```
+
+`--mode live` 下前端不发假数据，全部请求打相对路径 `/api`、`/auth`，由 Vite 开发服务器
+代理到 8787（改 `VITE_DEV_PROXY_TARGET` 可换地址）。**同源，所以没有跨域，Cookie 能带上。**
+
+想在**完全没有后端**的情况下先看界面（例如只过一遍交互稿）：
+
+```bash
+cd src/frontend && pnpm install && pnpm dev    # 默认 mock 模式，内置确定性假数据
+```
+
+也可以不起真后端、用仓库自带的桩服务跑通 live 链路：
+
+```bash
+cd src/frontend && node scripts/live-stub-server.mjs &   # 8787 上的桩
+pnpm dev --mode live
+```
 
 ### 接入真实数据
 
@@ -331,14 +357,19 @@ src/
 │   ├── handlers/         业务处理（脱离 Web 框架也能测）
 │   └── fixtures/         语料：合成 174 条 + 真实 180 条
 │
-├── front/      ★ 前端
-│   ├── pages/            页面实现
-│   ├── components/       展示组件
-│   └── api-client.ts     前端唯一的请求出口
+├── front/      旧 Next 页面（过渡态，仅本地调试用，不作为产品界面）
+│
+├── frontend/   ★ 队友的 Vite SPA —— 唯一的用户界面（独立工程，自带 package.json）
+│   └── docs/             API_CONTRACT / BACKEND_BOUNDARY / BACKEND_INTEGRATION
 │
 └── shared/     ★ 前后端唯一交接点
     └── contract.ts       端点常量 + 所有「过线」的类型
 ```
+
+> `src/frontend/` 是独立工程：有自己的 `package.json` / `tsconfig` / `pnpm-lock.yaml`，
+> 用 Tailwind 4 + Vite 8，跟 Next 侧的 Tailwind 3 不是一套。所以根 `tsconfig.json`
+> 把它 `exclude` 掉了 —— 否则 `npm run typecheck` 会拿 Next 的编译选项去检查 SPA 代码。
+> 它的类型检查要进到 `src/frontend` 里跑 `pnpm typecheck`。
 
 > 注意：`framework/params.ts` 里的 `pageLimit()` 是唯一允许的「查询串数字解析」。
 > 别用 `Number(x)` —— `Number(null) === 0` 是合法数字，缺省会被夹成 1，

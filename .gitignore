@@ -86,3 +86,9 @@ Thumbs.db
 
 # 本地助手工具的工作目录，不属于工程源码
 .workbuddy/
+
+.vercel
+.env*
+
+# 工具写权限探针，非工程文件
+.write-probe

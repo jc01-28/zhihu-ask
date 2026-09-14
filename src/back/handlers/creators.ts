@@ -16,6 +16,7 @@
  */
 
 import { cacheNamespace, createRuntime } from '@/back/adapters';
+import { FixtureSource } from '@/back/adapters/source-fixture';
 import { httpsOrNull, personIdOf } from '@/back/domain/avatar';
 import { toFieldCreatorCard } from '@/back/domain/creator-card';
 import { findPersonInIndexes, personRelevance, topicNamesOf } from '@/back/domain/field-graph';
@@ -62,6 +63,35 @@ async function loadRegistry(): Promise<Map<string, PersonRecord>> {
       corpora.push(...(await source[method](500)));
     } catch (error) {
       console.warn(`[creators] 读取语料 ${method} 失败（不影响其它来源）：`, error);
+    }
+  }
+
+  /**
+   * ⚠️ 线上（Vercel）必须走这一段。
+   *
+   * `enumerateCorpus` / `enumerateRealCorpus` 在 `ContentSource` 接口里是**可选方法**，
+   * 而实际实现它们的只有 `FixtureSource`（见 `source-fixture.ts`）。
+   * 生产环境配了真实密钥 → `USE_FIXTURES` 未开启 → 拿到的是 `ZhihuHttpSource`，
+   * 它**没有枚举能力**，于是上面的循环一次都不进，`corpora` 为空。
+   *
+   * 后果不是「少几个人」，而是注册表完全为空 ⇒ `getCreatorCard()` 恒返回 null
+   * ⇒ 建会话时 `resolveCreatorForConversation` 拿不到人物 ⇒ 接口回 409
+   * ⇒ 前端拿到 null 不跳转，表现就是**「创建对话进不去下一个界面」**。
+   *
+   * 所以这里用随包发布的真实语料（`harvested-hits.json`，harvest 抓下来的真实知乎内容）
+   * 兜一层。注意只调 `enumerateRealCorpus` —— 它会忽略 FIXTURE_CORPUS，
+   * 永远只返回真实内容，不会把「林一舟」这类虚构作者带进线上。
+   * 检索链路仍然是实时源，不受影响。
+   */
+  if (corpora.length === 0) {
+    try {
+      const committed = await new FixtureSource().enumerateRealCorpus(500);
+      corpora.push(...committed);
+      console.info(
+        `[creators] 数据源不支持语料枚举（${namespace}），已回落至随包发布的真实语料：${committed.length} 条`,
+      );
+    } catch (error) {
+      console.warn('[creators] 回落至随包发布的真实语料失败：', error);
     }
   }
 

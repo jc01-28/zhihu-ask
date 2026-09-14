@@ -9,6 +9,7 @@
  * 与框架解耦：不 import next/*。语料通过适配层拿，缓存带命名空间。
  */
 
+import { FixtureSource } from '@/back/adapters/source-fixture';
 import { cacheNamespace, createRuntime } from '@/back/adapters';
 import {
   buildFieldIndex,
@@ -68,6 +69,27 @@ async function loadCorpus(): Promise<SearchHit[]> {
 
   if (typeof source.enumerateCorpus === 'function') {
     return source.enumerateCorpus(500);
+  }
+
+  /**
+   * ⚠️ 线上（Vercel）缺的就是这一步：生产环境配了真实密钥 ⇒ 走 `ZhihuHttpSource`，
+   * 它没有上面两个枚举方法，于是直接落到下面「每个领域做一次检索」的降级路径。
+   * 那条路径每个领域只用一个关键词、还要消耗知乎配额，实测**结果为 0**，
+   * 表现是星图一片空白、`persons=0`。
+   *
+   * 和 `creators.ts` 保持一致：先试随包发布的真实语料（harvest 抓下来的真实知乎内容），
+   * 它比按领域检索更完整且不消耗配额。取不到再降级到下面的检索路径。
+   */
+  try {
+    const committed = await new FixtureSource().enumerateRealCorpus(500);
+    if (committed.length > 0) {
+      console.info(
+        `[fields] 数据源不支持全库枚举，已回落至随包发布的真实语料：${committed.length} 条`,
+      );
+      return committed;
+    }
+  } catch (error) {
+    console.warn('[fields] 回落至随包发布的真实语料失败：', error);
   }
 
   console.warn(

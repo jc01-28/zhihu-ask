@@ -108,8 +108,11 @@ export function FieldGraphPage({ session }: { session: AuthSessionView }) {
     const conversation = await startConversation.start(selectedCreator.id, null);
     if (!conversation) return;
     setSelectedCreator(null);
-    navigate(`/app/chat/${encodeURIComponent(conversation.id)}`);
-  }, [navigate, selectedCreator, startConversation]);
+    // 记下来路：从星图进的聊天，返回时应该回到**这片星图**，而不是写死的找人页
+    navigate(`/app/chat/${encodeURIComponent(conversation.id)}`, {
+      state: { from: `/app/fields/${encodeURIComponent(fieldId ?? "")}` },
+    });
+  }, [fieldId, navigate, selectedCreator, startConversation]);
 
   if (state.status === "not-found") {
     return (

@@ -8,12 +8,14 @@
  * 这样现场演示不会因为网络抖动、额度耗尽、接口临停而失败。
  *
  * 用法：
- *   node --env-file=.env.local scripts/harvest.mjs
- *   node --env-file=.env.local scripts/harvest.mjs "自定义查询1" "自定义查询2"
+ *   node scripts/harvest.mjs
+ *   node scripts/harvest.mjs "自定义查询1" "自定义查询2"
  *
  * 输出：src/back/fixtures/harvested-hits.json
  * 之后把 FixtureSource 指到它即可离线跑（见 README「预热与离线演示」）。
  */
+
+import './load-env.mjs';
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -21,6 +23,8 @@ import path from 'node:path';
 const BASE = (process.env.ZHIHU_API_BASE || 'https://developer.zhihu.com').replace(/\/$/, '');
 const SECRET = process.env.ZHIHU_ACCESS_SECRET;
 const OUT = path.resolve(process.cwd(), 'src/back/fixtures/harvested-hits.json');
+/** 真实热榜单独落一份：它跟检索语料的用途不同，混在一起会让「热榜是不是编的」变得无法自证 */
+const HOT_OUT = path.resolve(process.cwd(), 'src/back/fixtures/hot-list.json');
 
 /**
  * 默认种子查询。分成两组是刻意的 —— 它们服务两个不同功能，但**落在同一份语料**里：
@@ -112,6 +116,39 @@ function mapItem(item) {
   };
 }
 
+/**
+ * 抓**真实**热榜。
+ *
+ * 为什么单独抓：热榜以前取自 `sample-hits.json` 的占位数据，URL 是
+ * `https://www.zhihu.com/question/fixture-hot-1` 这种编造地址 —— 演示时一眼假。
+ * 既然 Access Secret 是真的，热榜就该是真的（它不像检索那样需要枚举全库，
+ * 一次请求就够，完全可以离线预热）。
+ */
+async function fetchHotList(limit = 30) {
+  const url = new URL(`${BASE}/api/v1/content/hot_list`);
+  url.searchParams.set('Limit', String(Math.min(limit, 30)));
+
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${SECRET}`,
+      'X-Request-Timestamp': String(Math.floor(Date.now() / 1000)),
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const text = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+
+  const body = JSON.parse(text);
+  if (body.Code !== 0) throw new Error(`Code=${body.Code} ${body.Message ?? ''}`);
+
+  return (body.Data?.Items ?? []).map((i) => ({
+    title: i.Title ?? '',
+    url: i.Url ?? '',
+    summary: i.Summary ?? '',
+  }));
+}
+
 async function main() {
   requireSecret();
 
@@ -145,6 +182,20 @@ async function main() {
   await writeFile(
     OUT,
     JSON.stringify({ harvestedAt: new Date().toISOString(), seeds, failed, hits }, null, 2),
+    'utf8',
+  );
+
+  // 真实热榜。抓不到就写空数组 —— 宁可空着，也绝不退回编造的占位数据
+  let hotList = [];
+  try {
+    hotList = await fetchHotList();
+    console.log(`\n热榜 → ${hotList.length} 条（真实知乎热榜）`);
+  } catch (error) {
+    console.warn(`\n热榜抓取失败（不影响检索语料）：${error.message ?? error}`);
+  }
+  await writeFile(
+    HOT_OUT,
+    JSON.stringify({ harvestedAt: new Date().toISOString(), items: hotList }, null, 2),
     'utf8',
   );
 

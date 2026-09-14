@@ -63,6 +63,23 @@ function loadHarvested(): SearchHit[] {
   }
 }
 
+/**
+ * hot-list.json —— harvest.mjs 抓下来的**真实**知乎热榜。
+ *
+ * ⚠️ 不能再用 `sample-hits.json` 里的占位热榜：那条数据的 URL 是
+ * `https://www.zhihu.com/question/fixture-hot-1`，一眼假，演示时很致命。
+ * 抓不到热榜时返回空数组 —— 空着比编造诚实。
+ */
+function loadRealHotList(): HotItem[] {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('@/back/fixtures/hot-list.json') as { items?: HotItem[] };
+    return mod.items ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export interface FixtureComposition {
   scope: CorpusScope;
   synthetic: number;
@@ -184,7 +201,7 @@ export class FixtureSource implements ContentSource {
   }
 
   async hotList(limit = 20): Promise<HotItem[]> {
-    return db.hotList.slice(0, limit);
+    return loadRealHotList().slice(0, limit);
   }
 
   async myFollowees(limit = 50): Promise<Followee[]> {

@@ -77,6 +77,25 @@ function toIdentityConfidence(experiences: ExperienceEvent[]): IdentityConfidenc
   return 'low';
 }
 
+/**
+ * 证据的「来源」标签。
+ *
+ * ⚠️ 这个字段表达的是**内容本身来自哪里**，不是"这次运行是读本地文件还是实时调接口"。
+ *
+ * 之前写成 `USE_FIXTURES === '1' ? 'fixture' : 'zhihu_search'`，结果很糟：
+ * 语料是用**真实 Access Secret 从知乎抓下来**的（真实作者、真实正文、真实 URL），
+ * 只因为走离线预热读本地文件，就被整条标成 `fixture`。评委和用户看到的结论是
+ * 「这个演示用的是假数据」——而内容其实是真的。**离线预热是工程手段，不改变数据真伪。**
+ *
+ * 所以：语料范围是 `real` 时标 `zhihu_search`；`all` 会混入合成语料（虚构作者），
+ * 那种情况标 `fixture` 才诚实。
+ */
+function evidenceSource(): 'fixture' | 'zhihu_search' {
+  if (process.env.USE_FIXTURES !== '1') return 'zhihu_search';
+  const scope = (process.env.FIXTURE_CORPUS ?? 'all').trim().toLowerCase();
+  return scope === 'real' ? 'zhihu_search' : 'fixture';
+}
+
 /** 一条经历 → 一条证据。必须是 https 或 null，否则前端会拒整条卡。 */
 function toEvidence(event: ExperienceEvent, index: number): Evidence {
   return {
@@ -89,9 +108,7 @@ function toEvidence(event: ExperienceEvent, index: number): Evidence {
     kind: event.firstPerson ? '亲身经历' : '专业分析',
     // 知乎搜索接口不返回结构化时间戳，只有正文里的时间线索
     publishedAt: event.timeHint || '时间未标注',
-    source: (process.env.USE_FIXTURES === '1' ? 'fixture' : 'zhihu_search') as
-      | 'fixture'
-      | 'zhihu_search',
+    source: evidenceSource(),
     url: httpsOrNull(event.sourceUrl),
   };
 }

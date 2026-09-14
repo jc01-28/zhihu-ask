@@ -25,25 +25,44 @@
 
 ## 0. 五分钟上手
 
+> **现在是双进程**：`zhihu-ask` 只出 API（8787），`src/fronted` 才是界面（5173）。
+> 只跑 `npm run dev` 会在 3000 上起旧的 Next 页面 —— 那是过渡态，**不是产品界面**。
+
 ```bash
+# ── 终端 A：后端 API ────────────────────────────────
 npm install
 
 # 零凭证模式：先跑通链路，再补业务
 cp .env.example .env.local
 sed -i 's/^USE_FIXTURES=0/USE_FIXTURES=1/' .env.local
 sed -i "s|^SESSION_SECRET=.*|SESSION_SECRET=$(openssl rand -hex 32)|" .env.local
-npm run dev        # → http://localhost:3000
+npm run dev -- --port 8787
+```
+
+```bash
+# ── 终端 B：前端 SPA（需要 Node ≥ 22.13 + pnpm）──────
+cd src/fronted
+pnpm install
+pnpm dev --mode live      # → http://localhost:5173
 ```
 
 **先打 `/api/health`**，它会告诉你缺什么凭证、数据目录是否可写：
 
 ```bash
-curl -s localhost:3000/api/health | python3 -m json.tool
+curl -s localhost:8787/api/health | python3 -m json.tool
 ```
+
+前端三种跑法：
+
+| 命令 | 说明 |
+|---|---|
+| `pnpm dev --mode live` | **联调用**。请求打相对路径 `/api`，由 Vite 代理到 `VITE_DEV_PROXY_TARGET`（默认 8787）。同源，无跨域，Cookie 正常 |
+| `pnpm dev` | Mock 模式。内置确定性假数据，不需要后端，用来过交互 |
+| `node scripts/live-stub-server.mjs & pnpm dev --mode live` | 不起真后端，用仓库自带桩服务跑通 live 链路 |
 
 | 命令 | 作用 |
 |---|---|
-| `npm run dev` | 开发服务 |
+| `npm run dev` | 后端开发服务 |
 | `npm run typecheck` | 类型检查（提交前必跑） |
 | `npm run build` | 生产构建（提交前必跑） |
 | `npm run e2e` | 集成测试 28 项（fixture + 无 LLM，约 3 秒） |
@@ -63,23 +82,44 @@ curl -s localhost:3000/api/health | python3 -m json.tool
 src/
 ├── app/       Next.js 路由壳 —— 只转发，不放业务
 ├── back/      ★ 后端（主战场）
-├── front/     ★ 前端
+├── front/     旧 Next 页面（过渡态，不是产品界面）
+├── fronted/  ★ 队友的 Vite SPA —— 唯一的用户界面（独立工程）
 └── shared/    ★ 前后端唯一交接点
 ```
 
-`src/app/` 是 Next.js 强制的路由目录，必须存在；但里面**只有壳** ——
-`api/**/route.ts` 把 HTTP 上下文拍平成参数转交 `back/handlers/`，`page.tsx` 转交 `front/pages/`。
+`src/app/` 是 Next.js 强制的路由目录，必须存在；`api/**/route.ts` 把 HTTP 上下文拍平成
+参数转交 `back/handlers/`。Next 侧不再承担界面职责。
+
+> ⚠️ `src/fronted/` 是**独立工程**：自己的 `package.json` / `tsconfig` / `pnpm-lock.yaml`，
+> Tailwind 4 + Vite 8，跟 Next 侧的 Tailwind 3 不是一套。所以根 `tsconfig.json` 把它
+> `exclude` 掉了 —— 否则 `npm run typecheck` 和 `next build` 会拿 Next 的编译选项去检查
+> SPA 代码（`import.meta.env`、`vite/client` 类型），必然报错。SPA 的类型检查进
+> `src/fronted` 跑 `pnpm typecheck`。
+>
+> 它也是**接口形状的事实源**：`src/fronted/src/shared/contracts/*.ts` 全部 zod `.strict()`，
+> 配 `src/fronted/docs/` 下三份文档。改任何响应字段都要回来看这里。
 
 ### 展开
 
 ```
 src/
 ├── app/                           Next.js 路由壳（不放业务逻辑）
-│   ├── api/ask/route.ts           → back/handlers/ask
-│   ├── api/health/route.ts        → back/handlers/health
-│   ├── api/oauth/status/route.ts  → back/handlers/oauth-status
-│   ├── api/oauth/{authorize,callback,logout}/route.ts
-│   ├── api/image-proxy/route.ts   纯代理，无业务
+│   ├── api/agent/search/          问题找人（NDJSON 流式）→ back/handlers/agent
+│   ├── api/agent/runs/[runId]/    刷新恢复           → back/handlers/agent
+│   ├── api/compare/               三栏对比           → back/handlers/agent
+│   ├── api/creators/[creatorId]/  人物公开资料       → back/handlers/creators
+│   ├── api/topics/hot/            热榜               → back/handlers/agent
+│   ├── api/fields/                领域检索           → back/handlers/fields
+│   ├── api/fields/featured/       推荐领域           → back/handlers/fields
+│   ├── api/fields/[fieldId]/graph/ 领域星图          → back/handlers/fields
+│   ├── api/conversations/         会话（创建/读取/重置/消息/Agent/咨询）
+│   ├── api/consultation/packages/ 咨询套餐
+│   ├── api/auth/session/          登录状态           → back/handlers/auth
+│   ├── api/auth/zhihu/{login,callback,logout}/
+│   ├── api/health/                能力自检           → back/handlers/health
+│   ├── api/image-proxy/           纯代理，无业务
+│   ├── api/ask/                   @deprecated 兼容旧脚本
+│   ├── api/oauth/*/               @deprecated 兼容旧脚本
 │   ├── layout.tsx                 html 骨架 + 引入 front/styles
 │   └── page.tsx                   → front/pages/HomePage
 │
@@ -169,23 +209,45 @@ front ──┘
 
 接口：
 
+后端 **20 个接口已全部就绪**（2026-09-14）。`agent/search` 与 `agent-runs` 是
+**NDJSON 流式**，其余一次性返回。
+
 | 端点 | 状态 | 说明 |
 |---|---|---|
 | `GET /api/auth/session` | ✅ | `configured` / `authenticated` / `user`，前端三分支全靠它 |
 | `GET /api/auth/zhihu/login` | ✅ | 302 到知乎授权页（整页跳转，不是 fetch） |
 | `GET /api/auth/zhihu/callback` | ✅ | 302 回 `/app?auth=成功或错误码` |
 | `GET\|POST /api/auth/zhihu/logout` | ✅ | 清会话后 302 回 `/app?auth=required` |
-| `POST /api/agent/search` | ✅ | 问题找人。**当前一次性返回**，不是规格里写的 NDJSON 流式 |
+| `POST /api/agent/search` | ✅ | 问题找人，**NDJSON 流式**（六阶段：loading_context → … → saving） |
+| `GET /api/agent/runs/:runId` | ✅ | 刷新恢复。`runId` 必须是标准 uuid |
+| `POST /api/compare` | ✅ | 三栏对比。请求**复用 `SearchRequest`**，不是 `{runId}` |
+| `GET /api/creators/:creatorId` | ✅ | 人物公开资料。星图与找人**共用这一个出口** |
+| `GET /api/topics/hot` | ✅ | 热榜。不可用时返回空列表 + `unavailable: true`，**不是错误** |
 | `GET /api/fields/featured` | ✅ | 推荐领域（7 个，顺序即定义顺序） |
 | `GET /api/fields?query=&limit=` | ✅ | 领域搜索。**只返回领域，不返回人物** |
-| `GET /api/fields/:fieldId/graph` | ✅ | 星图。议题与人物**都带后端算好的坐标** |
+| `GET /api/fields/:fieldId/graph` | ✅ | 星图。坐标 **0~1 归一化**，人物 `relevance` 是 0~100 |
+| `POST /api/conversations` | ✅ | 创建或幂等恢复（200 命中 / 201 新建）。**不要求登录** |
+| `GET /api/conversations/:id` | ✅ | 读取会话 |
+| `GET /api/conversations/:id/messages` | ✅ | 游标分页。游标是**上一条消息的 id**，不是下标 |
+| `POST /api/conversations/:id/messages` | ✅ | 发消息，**按 `clientMessageId` 幂等** |
+| `POST /api/conversations/:id/agent-runs` | ✅ | 会话内 Agent，**NDJSON 流式**（`agent.*` 事件） |
+| `POST /api/conversations/:id/reset` | ✅ | 重置。会话 id 不变，前端整体替换 |
+| `POST /api/conversations/:id/consultation/actions` | ✅ | 咨询状态机。非法流转 409 + `details` 回正 |
+| `GET /api/consultation/packages` | ✅ | 套餐。金额单位是人民币**分** |
 | `GET /api/health` | ✅ | 含 `corpus` 构成，演示前先看它 |
 | `GET /api/image-proxy` | ✅ | 头像同源代理 |
 | `/api/ask`、`/api/oauth/*` | 🟡 废弃别名 | 仅为兼容旧脚本，新代码不要用 |
 
-**领域域的坐标系**：`0~1000` 的正方形画布，中心 `(500,500)` 是领域中心节点。
-议题在半径 300 的圆上均匀分布，人物挂在各自**主要议题**的外圈（角度与半径带确定性抖动）。
-前端等比缩放到容器即可，**不需要自己算布局**；刷新页面位置不变，演示时这点很重要。
+**会话为什么不要登录**：前端 `/app/chat/:conversationId` 是唯一没有 `RequireAuth`
+的路由（其余 `/app/*` 都有）。后端若返回 401，那个页面一进去就是死的。
+未授权时用 `zh_guest` cookie 维持稳定访客身份 —— 「稳定」很关键，否则刷新一次就换一个人。
+
+**咨询是模拟支付**：不接受银行卡 / 手机号 / 身份证字段，不创建真实订单，不产生扣款。
+
+**领域域的坐标系**：`0~1` 归一化，中心 `(0.5, 0.5)` 是领域中心节点。
+议题在半径 0.3 的圆上均匀分布。前端按容器尺寸缩放即可，**不需要自己算布局**；
+刷新页面位置不变，演示时这点很重要。人物**没有**坐标，只有 `topicIds` ——
+由前端决定怎么环绕排布（`relevance` 0~100 可用来决定头像大小）。
 
 ⚠️ **领域域只认真实语料**（`enumerateRealCorpus`，无视 `FIXTURE_CORPUS`）。
 它展示的是「谁**真的**写过这个话题」—— 一旦混进合成语料里的虚构作者

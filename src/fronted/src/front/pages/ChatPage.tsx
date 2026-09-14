@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { CircleAlert, RotateCcw } from "lucide-react";
 
 import { Button } from "@/front/components/ui/button";
@@ -44,6 +44,22 @@ export function ChatPage() {
   const conversation = useConversation(conversationId ?? "");
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentPackageId, setPaymentPackageId] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  /**
+   * 从哪来回哪去。原来是 `<a href="/app/find">`：
+   * 一是整页刷新（SPA 里不该发生），二是写死了目标 —— 从领域星图进来的人会被送到无关的页面。
+   *
+   * ⚠️ 别用 `location.key === 'default'` 判断"有没有历史再回退"：
+   * 在 MemoryRouter（也就是全部单测）里初始 key 不是 'default'，`navigate(-1)` 会静默无效。
+   * 改成跳转时显式带 `state.from`（见 FindPeoplePage / FieldGraphPage），这里读它。
+   * 直达打开（没有 from）时兜底去「问题找人」。
+   */
+  const goBack = () => {
+    const from = (location.state as { from?: string } | null)?.from;
+    navigate(from ?? "/app/find", { replace: true });
+  };
 
   if (!conversationId) return <NotFoundPage />;
 
@@ -68,8 +84,8 @@ export function ChatPage() {
             {conversation.loadError?.message ?? "这个会话不存在或已过期。"}
             请回到「问题找人」重新搜索并选择人物。
           </p>
-          <Button asChild className="mt-4 h-11 rounded-xl">
-            <a href="/app/find">返回找人</a>
+          <Button className="mt-4 h-11 rounded-xl" onClick={goBack}>
+            返回上一页
           </Button>
         </div>
       </main>
@@ -90,8 +106,8 @@ export function ChatPage() {
                 <RotateCcw /> 重试
               </Button>
             )}
-            <Button variant="outline" asChild>
-              <a href="/app/find">返回找人</a>
+            <Button variant="outline" onClick={goBack}>
+              返回上一页
             </Button>
           </div>
         </div>

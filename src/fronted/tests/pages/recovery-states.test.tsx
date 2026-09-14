@@ -85,14 +85,20 @@ describe("恢复与错误状态", () => {
     expect(await screen.findByText(/与 林知行 的虚拟对话/)).toBeInTheDocument();
   });
 
-  it("会话不存在时展示 404 页并提供返回找人", async () => {
-    renderApp({ client: createTestClient(), route: "/chat/does-not-exist" });
+  it("会话不存在时展示 404 页，返回入口走 SPA 路由而不是整页刷新", async () => {
+    const { router } = renderApp({
+      client: createTestClient(),
+      route: "/chat/does-not-exist",
+    });
 
     expect(await screen.findByText("会话不存在")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /返回找人/ })).toHaveAttribute(
-      "href",
-      "/app/find",
-    );
+
+    // 应该是 button（SPA 导航），不是 <a href>（会整页刷新、丢掉 SPA 状态）
+    const back = screen.getByRole("button", { name: /返回上一页/ });
+    await userEvent.click(back);
+
+    // 直达打开（没有可回退的应用内历史）时兜底去「问题找人」
+    expect(router.state.location.pathname).toBe("/app/find");
   });
 
   it("reset 成功后整体替换会话与消息", async () => {

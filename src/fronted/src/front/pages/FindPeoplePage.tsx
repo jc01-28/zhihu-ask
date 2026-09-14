@@ -100,7 +100,10 @@ export function FindPeoplePage({ session }: { session: AuthSessionView }) {
     if (!conversation) return;
     setSelected(null);
     setLastRequested(null);
-    navigate(`/app/chat/${encodeURIComponent(conversation.id)}`);
+    // 记下来路，聊天页的「返回」才知道该回哪（见 ChatHeader / ChatPage 的 goBack）
+    navigate(`/app/chat/${encodeURIComponent(conversation.id)}`, {
+      state: { from: "/app/find" },
+    });
   };
 
   return (

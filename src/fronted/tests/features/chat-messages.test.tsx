@@ -21,7 +21,7 @@ describe("聊天页消息流", () => {
       screen.getByText(/这是虚拟聊天演示。所有消息都由 Mock API 生成/),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/我是通过「知乎问人」看到你的/),
+      screen.getByText(/我是通过「知域」看到你的/),
     ).toBeInTheDocument();
     expect(screen.getByText(/我是林知行（演示人物）/)).toBeInTheDocument();
   });
@@ -103,7 +103,7 @@ describe("聊天页消息流", () => {
     renderApp({ client, route: `/chat/${conversation.id}` });
 
     await screen.findByText(/与 林知行 的虚拟对话/);
-    expect(screen.getByText(/我是通过「知乎问人」看到你的/)).toBeInTheDocument();
+    expect(screen.getByText(/我是通过「知域」看到你的/)).toBeInTheDocument();
     expect(screen.queryByText(/这是虚拟聊天演示/)).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "加载更早的消息" }));

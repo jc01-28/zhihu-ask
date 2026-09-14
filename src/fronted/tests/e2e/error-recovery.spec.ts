@@ -31,11 +31,13 @@ test("项目推荐页在任何登录态下都能看到，但不泄露任何业�
   // 推荐页不请求业务 API，也不展示搜索框与人物。
   await expect(page.getByLabel("你现在想找什么样的人？")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /开始找人/ })).toHaveCount(0);
-  // GitHub 地址未配置时给禁用态，而不是一个指向别处的死链接。
-  const github = page.getByRole("button", { name: /GitHub 地址暂未配置/ });
+  // Demo 始终提供固定的项目地址。
+  const github = page.getByRole("link", { name: /查看 GitHub 项目/ });
   await expect(github).toBeVisible();
-  await expect(github).toBeDisabled();
-  await expect(page.getByRole("link", { name: /查看 GitHub 项目/ })).toHaveCount(0);
+  await expect(github).toHaveAttribute(
+    "href",
+    "https://github.com/jc01-28/zhihu-ask/tree/main",
+  );
 });
 
 test("未授权：功能首页只给唯一授权入口，不提供任何绕过方式", async ({ page }) => {

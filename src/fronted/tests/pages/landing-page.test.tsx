@@ -11,6 +11,7 @@ describe("项目推荐页", () => {
     renderApp({ client: createTestClient(), route: "/" });
 
     expect(await screen.findByText("知乎黑客松 Demo")).toBeInTheDocument();
+    expect(screen.getByText("知域")).toBeInTheDocument();
     expect(screen.getByText(/找到值得问的人/)).toBeInTheDocument();
     expect(screen.queryByLabelText("你现在想找什么样的人？")).toBeNull();
     expect(screen.queryByText("演示用户")).toBeNull();
@@ -33,16 +34,19 @@ describe("项目推荐页", () => {
     expect(topics).not.toHaveBeenCalled();
   });
 
-  it("未配置 GitHub 地址时显示暂未配置，而不是死链接", async () => {
+  it("未配置环境变量时仍使用线上 Demo 的 GitHub 项目地址", async () => {
     vi.stubEnv("VITE_GITHUB_URL", "");
 
     renderApp({ client: createTestClient(), route: "/" });
 
-    const disabled = await screen.findByRole("button", {
-      name: /GitHub 地址暂未配置/,
+    const link = await screen.findByRole("link", {
+      name: /查看 GitHub 项目/,
     });
-    expect(disabled).toBeDisabled();
-    expect(screen.queryByRole("link", { name: /查看 GitHub 项目/ })).toBeNull();
+    expect(link).toHaveAttribute(
+      "href",
+      "https://github.com/jc01-28/zhihu-ask/tree/main",
+    );
+    expect(link).toHaveAttribute("target", "_blank");
   });
 
   it("配置 GitHub 地址后使用该地址并在新标签打开", async () => {

@@ -5,6 +5,9 @@
  * 直接覆盖：页面只需要消费解析结果，不需要自己判断 URL 合法性。
  */
 
+/** 线上 Demo 默认展示的项目地址；环境变量未配置时也必须有可用出口。 */
+export const PROJECT_GITHUB_URL = "https://github.com/jc01-28/zhihu-ask/tree/main";
+
 /** 明确标注为占位的示例地址：即使被填进环境变量，也视为「未配置」。 */
 function isPlaceholder(url: URL): boolean {
   if (url.hostname === "example.com" || url.hostname.endsWith(".example.com")) {

@@ -10,6 +10,7 @@ import { Skeleton } from "@/front/components/ui/skeleton";
 import { useApiClient } from "@/front/app/api-context";
 import { ApiError } from "@/front/api/ApiError";
 import { CreatorDetail } from "@/front/features/creator/CreatorDetail";
+import { fieldPersonToCreatorCard } from "@/front/features/creator/field-person-card";
 import { FieldTopicFilter } from "@/front/features/field-graph/FieldTopicFilter";
 import { FieldGraph } from "@/front/features/field-graph/FieldGraph";
 import {
@@ -78,7 +79,7 @@ export function FieldGraphPage({ session }: { session: AuthSessionView }) {
     [layout],
   );
 
-  /** 打开人物名片：先取后端公开资料，拿不到就明确报错，不猜也不伪造。 */
+  /** 打开人物名片：优先取后端资料；live source 未注册人物时用星图公开字段兜底。 */
   const openPerson = useCallback(
     async (person: FieldPerson) => {
       setProfileError(null);
@@ -87,6 +88,15 @@ export function FieldGraphPage({ session }: { session: AuthSessionView }) {
         const creator = await client.getCreator(person.id);
         setSelectedCreator(creator);
       } catch (caught) {
+        if (caught instanceof ApiError && caught.status === 404 && graph) {
+          const topicNames = graph.topics
+            .filter((topic) => person.topicIds.includes(topic.id))
+            .map((topic) => topic.name);
+          setSelectedCreator(
+            fieldPersonToCreatorCard(person, graph.field.name, topicNames),
+          );
+          return;
+        }
         setProfileError({
           message:
             caught instanceof Error
@@ -99,7 +109,7 @@ export function FieldGraphPage({ session }: { session: AuthSessionView }) {
         setPendingPersonId(null);
       }
     },
-    [client],
+    [client, graph],
   );
 
   const handleStartConversation = useCallback(async () => {

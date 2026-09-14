@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { ApiError } from "@/front/api/ApiError";
 import { findFieldGraph } from "@/front/mocks/field-data";
 import { createTestClient, renderApp } from "../test-utils";
 
@@ -282,5 +283,27 @@ describe("领域星图", () => {
     await userEvent.click(screen.getByRole("button", { name: /重新加载公开资料/ }));
 
     expect(await screen.findByText("领域关联")).toBeInTheDocument();
+  });
+
+  it("公开资料接口返回 404 时使用星图已有资料打开领域名片", async () => {
+    const { client, canvas } = await renderGraph();
+    client.getCreator = async () => {
+      throw new ApiError({
+        code: "CREATOR_NOT_FOUND",
+        message: "这位创作者的公开资料暂不可用",
+        status: 404,
+        retryable: false,
+      });
+    };
+
+    await userEvent.click(
+      within(canvas).getByRole("button", { name: /查看人物 沈亦然/ }),
+    );
+
+    const sheet = (await screen.findByText("领域关联")).closest(
+      "[data-slot='sheet-content']",
+    ) as HTMLElement;
+    expect(within(sheet).getByText("沈亦然")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

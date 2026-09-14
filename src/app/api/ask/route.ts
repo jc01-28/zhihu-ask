@@ -2,7 +2,7 @@ import { askRoute } from '@/app/api/_ask-route';
 
 export const runtime = 'nodejs';
 // 与 /api/agent/search 同步抬高到 300：跑的是同一条 8 步链路，同样会被 60s 掐断。
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 /**
  * **内部链路调试口**：返回链路的原始产物 `AskResult`（8 步 trace / route / metrics / 证据）。

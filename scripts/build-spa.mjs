@@ -42,7 +42,20 @@ if (major < 22) {
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const build = spawnSync(pnpm, ['run', 'build'], {
   cwd: SPA_DIR,
-  env: { ...process.env, SPA_BASE: '/spa/' },
+  /**
+   * 两个变量缺一不可，漏一个都是灾难性的：
+   *
+   * `SPA_BASE=/spa/`：不设的话产物里是 `<script src="/assets/...">`，
+   *   而真实文件在 `/spa/assets/...` ⇒ 线上白屏。
+   *
+   * `VITE_API_MODE=live`：不设的话 `create-api-client` 会回退到 **mock**
+   *   （`import.meta.env.VITE_API_MODE === 'live' ? 'live' : 'mock'`），
+   *   线上跑的就是内置假数据 —— 页面照样能开、能点、能出结果，
+   *   但**一次后端请求都不会发**。登录、LLM、真实语料全都是摆设。
+   *   这个失败模式极阴险：看起来一切正常，只有对比后端日志才会发现请求数为 0。
+   *   2026-09-15 部署时就漏了它，用户一眼看出「没接 OAuth、LLM 没跑」。
+   */
+  env: { ...process.env, SPA_BASE: '/spa/', VITE_API_MODE: 'live' },
   stdio: 'inherit',
   shell: process.platform === 'win32',
 });

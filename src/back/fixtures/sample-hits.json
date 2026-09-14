@@ -12,7 +12,10 @@
       "authorAvatar": "",
       "authorBadgeText": "互联网行业 产品经理",
       "editTime": 1735689600,
-      "comments": ["降薪20%扛18个月这个算法很实用", "关键还是家里能不能兜住"],
+      "comments": [
+        "降薪20%扛18个月这个算法很实用",
+        "关键还是家里能不能兜住"
+      ],
       "authorityLevel": 3,
       "rankingScore": 0.93
     },
@@ -28,7 +31,9 @@
       "authorAvatar": "",
       "authorBadgeText": "",
       "editTime": 1738368000,
-      "comments": ["逃离型跳槽 vs 目标型跳槽 这个区分太准了"],
+      "comments": [
+        "逃离型跳槽 vs 目标型跳槽 这个区分太准了"
+      ],
       "authorityLevel": 2,
       "rankingScore": 0.88
     },
@@ -44,7 +49,9 @@
       "authorAvatar": "",
       "authorBadgeText": "技术管理",
       "editTime": 1730419200,
-      "comments": ["产出等于团队产出，这句话我记下了"],
+      "comments": [
+        "产出等于团队产出，这句话我记下了"
+      ],
       "authorityLevel": 4,
       "rankingScore": 0.91
     },
@@ -76,7 +83,9 @@
       "authorAvatar": "",
       "authorBadgeText": "AI 产品",
       "editTime": 1733011200,
-      "comments": ["从公司内部蹭项目这个思路很实在"],
+      "comments": [
+        "从公司内部蹭项目这个思路很实在"
+      ],
       "authorityLevel": 3,
       "rankingScore": 0.85
     },
@@ -92,35 +101,14 @@
       "authorAvatar": "",
       "authorBadgeText": "",
       "editTime": 1727740800,
-      "comments": ["能力曲线这个标准比晋升快慢实用"],
+      "comments": [
+        "能力曲线这个标准比晋升快慢实用"
+      ],
       "authorityLevel": 2,
       "rankingScore": 0.79
     }
   ],
-  "followees": [
-    {
-      "fullname": "周叙",
-      "urlToken": "zhou-xu",
-      "url": "https://www.zhihu.com/people/zhou-xu",
-      "avatarUrl": "",
-      "headline": "技术管理 / 前大厂技术负责人",
-      "followerCount": 18400
-    },
-    {
-      "fullname": "沈亦航",
-      "urlToken": "shen-yi-hang",
-      "url": "https://www.zhihu.com/people/shen-yi-hang",
-      "avatarUrl": "",
-      "headline": "写点职业选择",
-      "followerCount": 3200
-    }
-  ],
-  "hotList": [
-    {
-      "title": "如何看待 AI 让知识获取成本趋近于零？",
-      "url": "https://www.zhihu.com/question/fixture-hot-1",
-      "summary": "讨论 AI 对知识社区的影响"
-    }
-  ],
+  "followees": [],
+  "hotList": [],
   "myContents": []
 }

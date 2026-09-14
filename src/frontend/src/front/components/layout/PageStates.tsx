@@ -1,5 +1,6 @@
 import { CircleAlert, RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 import { Button } from "@/front/components/ui/button";
 import { Skeleton } from "@/front/components/ui/skeleton";
@@ -75,8 +76,10 @@ export function ErrorPanel({
             </Button>
           )}
           {backTo && (
+            // ⚠️ 用 Link 而不是 <a href>：<a> 会整页刷新，把 SPA 的路由状态全丢掉
+            // （表现就是「点了返回却像重新进了一次网站」）
             <Button variant="outline" asChild>
-              <a href={backTo}>{backLabel}</a>
+              <Link to={backTo}>{backLabel}</Link>
             </Button>
           )}
           {extra}

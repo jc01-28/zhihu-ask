@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import './globals.css';
+import '@/front/styles/globals.css';
 
 export const metadata: Metadata = {
   title: '知乎问人 · 让 AI 知道什么时候应该把问题还给人',

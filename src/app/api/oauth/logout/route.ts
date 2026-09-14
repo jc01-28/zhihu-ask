@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { SESSION_COOKIE, STATE_COOKIE } from '@/adapters/session';
+import { SESSION_COOKIE, STATE_COOKIE } from '@/back/adapters/session';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

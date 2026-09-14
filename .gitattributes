@@ -1,0 +1,20 @@
+# 行尾统一为 LF。
+#
+# 为什么必须显式钉死：本项目在 WSL（Linux）里开发，但 Windows 侧 git 的
+# core.autocrlf=true 会在**检出**时把 LF 转成 CRLF。后果有两个，都很难查：
+#   1. 从 Windows 检出一次，工作区里每个文件都变成「已修改」，diff 全红；
+#   2. .sh / .mjs 带上 CRLF 后 shebang 与部分解析会直接失败。
+#
+# eol=lf 比依赖 core.autocrlf 可靠 —— 它对 Windows 与 WSL 两种检出都生效，
+# 也不受每个人本地 git 配置的影响。
+* text=auto eol=lf
+
+# 二进制文件不做行尾转换
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary

@@ -102,5 +102,6 @@ Then confirm: did you change step logic? If yes, was `pipeline.version` incremen
 |---|---|---|
 | [README.md](README.md) | Public | Product story, positioning, how to run |
 | [DEVELOPER.md](DEVELOPER.md) | Developers | Architecture, engineering boundaries, extension guide |
-| [docs/STATUS.md](docs/STATUS.md) | Team | Progress, priorities, 48h plan |
+| `internal/STATUS.md` | Team | Progress, priorities, 48h plan — **gitignored, not published** |
+| `internal/HANDOFF.md` | Handover | Plain-language "what works / what doesn't / what next" — **gitignored, not published** |
 | This file | AI agents | Operating rules |

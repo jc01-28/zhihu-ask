@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { exchangeCode, pickAuthorizationCode, readOAuthConfig } from '@/adapters/zhihu-oauth';
-import { SESSION_COOKIE, STATE_COOKIE, sealSession } from '@/adapters/session';
+import { createRuntime } from '@/back/adapters';
+import { exchangeCode, pickAuthorizationCode, readOAuthConfig } from '@/back/adapters/zhihu-oauth';
+import { SESSION_COOKIE, STATE_COOKIE, sealSession } from '@/back/adapters/session';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,6 +42,16 @@ export async function GET(request: NextRequest) {
   try {
     const { accessToken, expiresIn } = await exchangeCode(config, code);
 
+    // 顺手取一次用户资料存进会话：状态查询就不用再打接口了。
+    // ⚠️ 知乎没有 `/user` 的正式 schema，读不到就是 null，不影响登录本身。
+    let profile = null;
+    try {
+      const runtime = createRuntime({ getOAuthToken: async () => accessToken });
+      profile = await runtime.source.myProfile();
+    } catch (error) {
+      console.warn('[oauth/callback] 读取用户资料失败（不影响登录）：', error);
+    }
+
     const response = NextResponse.redirect(
       new URL(`/?authorized=1&stateChecked=${stateChecked ? '1' : '0'}`, request.url),
     );
@@ -50,6 +61,7 @@ export async function GET(request: NextRequest) {
       sealSession({
         accessToken,
         expiresAt: Date.now() + Math.max(60, expiresIn - 60) * 1000,
+        profile,
       }),
       {
         httpOnly: true,

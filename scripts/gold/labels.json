@@ -1,0 +1,1332 @@
+{
+  "generatedAt": "2026-09-13T08:04:30.685Z",
+  "docCount": 168,
+  "note": "合成语料。firstPerson=true 表示作者第一人称讲述自己的决策经历，即「有效人选」的客观定义。此文件仅供评测，绝不参与检索。作者级判定按 topic 维度：只有在该主题上写过第一人称亲历的作者才算有效人选。",
+  "topicTerms": {
+    "career-transition": [
+      "大厂",
+      "创业公司",
+      "降薪",
+      "跳槽",
+      "晋升",
+      "离职",
+      "offer"
+    ],
+    "ic-to-manager": [
+      "管理岗",
+      "带团队",
+      "技术管理",
+      "转管理",
+      "一对一",
+      "晋升"
+    ],
+    "ai-transition": [
+      "转岗",
+      "AI产品",
+      "非科班",
+      "大模型",
+      "转型",
+      "学习路径"
+    ],
+    "work-life": [
+      "加班",
+      "通勤",
+      "家庭",
+      "城市",
+      "北京",
+      "上海",
+      "陪家人"
+    ],
+    "startup-equity": [
+      "期权",
+      "股权",
+      "成熟期",
+      "估值",
+      "现金",
+      "总包"
+    ]
+  },
+  "docs": {
+    "gold-0001": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "observer",
+      "authorName": "林一舟"
+    },
+    "gold-0002": {
+      "firstPerson": true,
+      "topic": "ic-to-manager",
+      "authorName": "林一舟"
+    },
+    "gold-0003": {
+      "firstPerson": true,
+      "topic": "ai-transition",
+      "authorName": "林一舟"
+    },
+    "gold-0004": {
+      "firstPerson": true,
+      "topic": "work-life",
+      "authorName": "林一舟"
+    },
+    "gold-0005": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "methodology",
+      "authorName": "苏明远"
+    },
+    "gold-0006": {
+      "firstPerson": true,
+      "topic": "career-transition",
+      "authorName": "苏明远"
+    },
+    "gold-0007": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "observer",
+      "authorName": "苏明远"
+    },
+    "gold-0008": {
+      "firstPerson": true,
+      "topic": "ai-transition",
+      "authorName": "苏明远"
+    },
+    "gold-0009": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "definition",
+      "authorName": "周叙"
+    },
+    "gold-0010": {
+      "firstPerson": true,
+      "topic": "startup-equity",
+      "authorName": "周叙"
+    },
+    "gold-0011": {
+      "firstPerson": true,
+      "topic": "career-transition",
+      "authorName": "周叙"
+    },
+    "gold-0012": {
+      "firstPerson": true,
+      "topic": "ic-to-manager",
+      "authorName": "周叙"
+    },
+    "gold-0013": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "observer",
+      "authorName": "陆文康"
+    },
+    "gold-0014": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "methodology",
+      "authorName": "陆文康"
+    },
+    "gold-0015": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "definition",
+      "authorName": "陆文康"
+    },
+    "gold-0016": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "observer",
+      "authorName": "陆文康"
+    },
+    "gold-0017": {
+      "firstPerson": true,
+      "topic": "ic-to-manager",
+      "authorName": "郝知远"
+    },
+    "gold-0018": {
+      "firstPerson": true,
+      "topic": "ai-transition",
+      "authorName": "郝知远"
+    },
+    "gold-0019": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "observer",
+      "authorName": "郝知远"
+    },
+    "gold-0020": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "methodology",
+      "authorName": "郝知远"
+    },
+    "gold-0021": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "definition",
+      "authorName": "沈亦航"
+    },
+    "gold-0022": {
+      "firstPerson": true,
+      "topic": "ic-to-manager",
+      "authorName": "沈亦航"
+    },
+    "gold-0023": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "methodology",
+      "authorName": "沈亦航"
+    },
+    "gold-0024": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "definition",
+      "authorName": "沈亦航"
+    },
+    "gold-0025": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "observer",
+      "authorName": "陈之遥"
+    },
+    "gold-0026": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "methodology",
+      "authorName": "陈之遥"
+    },
+    "gold-0027": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "definition",
+      "authorName": "陈之遥"
+    },
+    "gold-0028": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "observer",
+      "authorName": "陈之遥"
+    },
+    "gold-0029": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "methodology",
+      "authorName": "黄怀瑾"
+    },
+    "gold-0030": {
+      "firstPerson": true,
+      "topic": "startup-equity",
+      "authorName": "黄怀瑾"
+    },
+    "gold-0031": {
+      "firstPerson": true,
+      "topic": "career-transition",
+      "authorName": "黄怀瑾"
+    },
+    "gold-0032": {
+      "firstPerson": true,
+      "topic": "ic-to-manager",
+      "authorName": "黄怀瑾"
+    },
+    "gold-0033": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "definition",
+      "authorName": "吴听澜"
+    },
+    "gold-0034": {
+      "firstPerson": true,
+      "topic": "work-life",
+      "authorName": "吴听澜"
+    },
+    "gold-0035": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "methodology",
+      "authorName": "吴听澜"
+    },
+    "gold-0036": {
+      "firstPerson": true,
+      "topic": "career-transition",
+      "authorName": "吴听澜"
+    },
+    "gold-0037": {
+      "firstPerson": true,
+      "topic": "ic-to-manager",
+      "authorName": "郑既定"
+    },
+    "gold-0038": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "methodology",
+      "authorName": "郑既定"
+    },
+    "gold-0039": {
+      "firstPerson": true,
+      "topic": "work-life",
+      "authorName": "郑既定"
+    },
+    "gold-0040": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "observer",
+      "authorName": "郑既定"
+    },
+    "gold-0041": {
+      "firstPerson": true,
+      "topic": "career-transition",
+      "authorName": "冯临川"
+    },
+    "gold-0042": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "definition",
+      "authorName": "冯临川"
+    },
+    "gold-0043": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "observer",
+      "authorName": "冯临川"
+    },
+    "gold-0044": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "methodology",
+      "authorName": "冯临川"
+    },
+    "gold-0045": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "definition",
+      "authorName": "许子墨"
+    },
+    "gold-0046": {
+      "firstPerson": true,
+      "topic": "career-transition",
+      "authorName": "许子墨"
+    },
+    "gold-0047": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "methodology",
+      "authorName": "许子墨"
+    },
+    "gold-0048": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "definition",
+      "authorName": "许子墨"
+    },
+    "gold-0049": {
+      "firstPerson": true,
+      "topic": "work-life",
+      "authorName": "何清和"
+    },
+    "gold-0050": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "methodology",
+      "authorName": "何清和"
+    },
+    "gold-0051": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "definition",
+      "authorName": "何清和"
+    },
+    "gold-0052": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "observer",
+      "authorName": "何清和"
+    },
+    "gold-0053": {
+      "firstPerson": true,
+      "topic": "ai-transition",
+      "authorName": "吕砚秋"
+    },
+    "gold-0054": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "definition",
+      "authorName": "吕砚秋"
+    },
+    "gold-0055": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "observer",
+      "authorName": "吕砚秋"
+    },
+    "gold-0056": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "methodology",
+      "authorName": "吕砚秋"
+    },
+    "gold-0057": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "definition",
+      "authorName": "施南舟"
+    },
+    "gold-0058": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "observer",
+      "authorName": "施南舟"
+    },
+    "gold-0059": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "methodology",
+      "authorName": "施南舟"
+    },
+    "gold-0060": {
+      "firstPerson": true,
+      "topic": "startup-equity",
+      "authorName": "施南舟"
+    },
+    "gold-0061": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "observer",
+      "authorName": "张星野"
+    },
+    "gold-0062": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "methodology",
+      "authorName": "张星野"
+    },
+    "gold-0063": {
+      "firstPerson": true,
+      "topic": "ai-transition",
+      "authorName": "张星野"
+    },
+    "gold-0064": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "observer",
+      "authorName": "张星野"
+    },
+    "gold-0065": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "methodology",
+      "authorName": "孔元朗"
+    },
+    "gold-0066": {
+      "firstPerson": true,
+      "topic": "career-transition",
+      "authorName": "孔元朗"
+    },
+    "gold-0067": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "observer",
+      "authorName": "孔元朗"
+    },
+    "gold-0068": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "methodology",
+      "authorName": "孔元朗"
+    },
+    "gold-0069": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "definition",
+      "authorName": "曹亦白"
+    },
+    "gold-0070": {
+      "firstPerson": true,
+      "topic": "startup-equity",
+      "authorName": "曹亦白"
+    },
+    "gold-0071": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "methodology",
+      "authorName": "曹亦白"
+    },
+    "gold-0072": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "definition",
+      "authorName": "曹亦白"
+    },
+    "gold-0073": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "observer",
+      "authorName": "严长风"
+    },
+    "gold-0074": {
+      "firstPerson": true,
+      "topic": "work-life",
+      "authorName": "严长风"
+    },
+    "gold-0075": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "definition",
+      "authorName": "严长风"
+    },
+    "gold-0076": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "observer",
+      "authorName": "严长风"
+    },
+    "gold-0077": {
+      "firstPerson": true,
+      "topic": "ic-to-manager",
+      "authorName": "华岁安"
+    },
+    "gold-0078": {
+      "firstPerson": true,
+      "topic": "ai-transition",
+      "authorName": "华岁安"
+    },
+    "gold-0079": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "observer",
+      "authorName": "华岁安"
+    },
+    "gold-0080": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "methodology",
+      "authorName": "华岁安"
+    },
+    "gold-0081": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "definition",
+      "authorName": "金静观"
+    },
+    "gold-0082": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "observer",
+      "authorName": "金静观"
+    },
+    "gold-0083": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "methodology",
+      "authorName": "金静观"
+    },
+    "gold-0084": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "definition",
+      "authorName": "金静观"
+    },
+    "gold-0085": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "observer",
+      "authorName": "魏小满"
+    },
+    "gold-0086": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "methodology",
+      "authorName": "魏小满"
+    },
+    "gold-0087": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "definition",
+      "authorName": "魏小满"
+    },
+    "gold-0088": {
+      "firstPerson": true,
+      "topic": "ai-transition",
+      "authorName": "魏小满"
+    },
+    "gold-0089": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "methodology",
+      "authorName": "陶砚舟"
+    },
+    "gold-0090": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "definition",
+      "authorName": "陶砚舟"
+    },
+    "gold-0091": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "observer",
+      "authorName": "陶砚舟"
+    },
+    "gold-0092": {
+      "firstPerson": true,
+      "topic": "ic-to-manager",
+      "authorName": "陶砚舟"
+    },
+    "gold-0093": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "definition",
+      "authorName": "姜知微"
+    },
+    "gold-0094": {
+      "firstPerson": true,
+      "topic": "work-life",
+      "authorName": "姜知微"
+    },
+    "gold-0095": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "methodology",
+      "authorName": "姜知微"
+    },
+    "gold-0096": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "definition",
+      "authorName": "姜知微"
+    },
+    "gold-0097": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "observer",
+      "authorName": "林一舟"
+    },
+    "gold-0098": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "methodology",
+      "authorName": "林一舟"
+    },
+    "gold-0099": {
+      "firstPerson": true,
+      "topic": "work-life",
+      "authorName": "林一舟"
+    },
+    "gold-0100": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "observer",
+      "authorName": "林一舟"
+    },
+    "gold-0101": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "methodology",
+      "authorName": "苏明远"
+    },
+    "gold-0102": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "definition",
+      "authorName": "苏明远"
+    },
+    "gold-0103": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "observer",
+      "authorName": "苏明远"
+    },
+    "gold-0104": {
+      "firstPerson": true,
+      "topic": "work-life",
+      "authorName": "苏明远"
+    },
+    "gold-0105": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "definition",
+      "authorName": "周叙"
+    },
+    "gold-0106": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "observer",
+      "authorName": "周叙"
+    },
+    "gold-0107": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "methodology",
+      "authorName": "周叙"
+    },
+    "gold-0108": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "definition",
+      "authorName": "周叙"
+    },
+    "gold-0109": {
+      "firstPerson": true,
+      "topic": "work-life",
+      "authorName": "陆文康"
+    },
+    "gold-0110": {
+      "firstPerson": true,
+      "topic": "startup-equity",
+      "authorName": "陆文康"
+    },
+    "gold-0111": {
+      "firstPerson": true,
+      "topic": "career-transition",
+      "authorName": "陆文康"
+    },
+    "gold-0112": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "observer",
+      "authorName": "陆文康"
+    },
+    "gold-0113": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "methodology",
+      "authorName": "郝知远"
+    },
+    "gold-0114": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "definition",
+      "authorName": "郝知远"
+    },
+    "gold-0115": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "observer",
+      "authorName": "郝知远"
+    },
+    "gold-0116": {
+      "firstPerson": true,
+      "topic": "career-transition",
+      "authorName": "郝知远"
+    },
+    "gold-0117": {
+      "firstPerson": true,
+      "topic": "ic-to-manager",
+      "authorName": "沈亦航"
+    },
+    "gold-0118": {
+      "firstPerson": true,
+      "topic": "ai-transition",
+      "authorName": "沈亦航"
+    },
+    "gold-0119": {
+      "firstPerson": true,
+      "topic": "work-life",
+      "authorName": "沈亦航"
+    },
+    "gold-0120": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "definition",
+      "authorName": "沈亦航"
+    },
+    "gold-0121": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "observer",
+      "authorName": "陈之遥"
+    },
+    "gold-0122": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "methodology",
+      "authorName": "陈之遥"
+    },
+    "gold-0123": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "definition",
+      "authorName": "陈之遥"
+    },
+    "gold-0124": {
+      "firstPerson": true,
+      "topic": "work-life",
+      "authorName": "陈之遥"
+    },
+    "gold-0125": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "methodology",
+      "authorName": "黄怀瑾"
+    },
+    "gold-0126": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "definition",
+      "authorName": "黄怀瑾"
+    },
+    "gold-0127": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "observer",
+      "authorName": "黄怀瑾"
+    },
+    "gold-0128": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "methodology",
+      "authorName": "黄怀瑾"
+    },
+    "gold-0129": {
+      "firstPerson": true,
+      "topic": "work-life",
+      "authorName": "吴听澜"
+    },
+    "gold-0130": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "observer",
+      "authorName": "吴听澜"
+    },
+    "gold-0131": {
+      "firstPerson": true,
+      "topic": "career-transition",
+      "authorName": "吴听澜"
+    },
+    "gold-0132": {
+      "firstPerson": true,
+      "topic": "ic-to-manager",
+      "authorName": "吴听澜"
+    },
+    "gold-0133": {
+      "firstPerson": true,
+      "topic": "ai-transition",
+      "authorName": "郑既定"
+    },
+    "gold-0134": {
+      "firstPerson": true,
+      "topic": "work-life",
+      "authorName": "郑既定"
+    },
+    "gold-0135": {
+      "firstPerson": true,
+      "topic": "startup-equity",
+      "authorName": "郑既定"
+    },
+    "gold-0136": {
+      "firstPerson": true,
+      "topic": "career-transition",
+      "authorName": "郑既定"
+    },
+    "gold-0137": {
+      "firstPerson": true,
+      "topic": "ic-to-manager",
+      "authorName": "冯临川"
+    },
+    "gold-0138": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "definition",
+      "authorName": "冯临川"
+    },
+    "gold-0139": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "observer",
+      "authorName": "冯临川"
+    },
+    "gold-0140": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "methodology",
+      "authorName": "冯临川"
+    },
+    "gold-0141": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "definition",
+      "authorName": "许子墨"
+    },
+    "gold-0142": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "observer",
+      "authorName": "许子墨"
+    },
+    "gold-0143": {
+      "firstPerson": true,
+      "topic": "ai-transition",
+      "authorName": "许子墨"
+    },
+    "gold-0144": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "definition",
+      "authorName": "许子墨"
+    },
+    "gold-0145": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "observer",
+      "authorName": "何清和"
+    },
+    "gold-0146": {
+      "firstPerson": true,
+      "topic": "career-transition",
+      "authorName": "何清和"
+    },
+    "gold-0147": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "definition",
+      "authorName": "何清和"
+    },
+    "gold-0148": {
+      "firstPerson": true,
+      "topic": "ai-transition",
+      "authorName": "何清和"
+    },
+    "gold-0149": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "methodology",
+      "authorName": "吕砚秋"
+    },
+    "gold-0150": {
+      "firstPerson": true,
+      "topic": "startup-equity",
+      "authorName": "吕砚秋"
+    },
+    "gold-0151": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "observer",
+      "authorName": "吕砚秋"
+    },
+    "gold-0152": {
+      "firstPerson": true,
+      "topic": "ic-to-manager",
+      "authorName": "吕砚秋"
+    },
+    "gold-0153": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "definition",
+      "authorName": "施南舟"
+    },
+    "gold-0154": {
+      "firstPerson": false,
+      "topic": "work-life",
+      "noise": "observer",
+      "authorName": "施南舟"
+    },
+    "gold-0155": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "methodology",
+      "authorName": "施南舟"
+    },
+    "gold-0156": {
+      "firstPerson": true,
+      "topic": "career-transition",
+      "authorName": "施南舟"
+    },
+    "gold-0157": {
+      "firstPerson": true,
+      "topic": "ic-to-manager",
+      "authorName": "张星野"
+    },
+    "gold-0158": {
+      "firstPerson": true,
+      "topic": "ai-transition",
+      "authorName": "张星野"
+    },
+    "gold-0159": {
+      "firstPerson": true,
+      "topic": "work-life",
+      "authorName": "张星野"
+    },
+    "gold-0160": {
+      "firstPerson": true,
+      "topic": "startup-equity",
+      "authorName": "张星野"
+    },
+    "gold-0161": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "methodology",
+      "authorName": "林一舟"
+    },
+    "gold-0162": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "definition",
+      "authorName": "林一舟"
+    },
+    "gold-0163": {
+      "firstPerson": false,
+      "topic": "ai-transition",
+      "noise": "observer",
+      "authorName": "林一舟"
+    },
+    "gold-0164": {
+      "firstPerson": true,
+      "topic": "work-life",
+      "authorName": "林一舟"
+    },
+    "gold-0165": {
+      "firstPerson": false,
+      "topic": "startup-equity",
+      "noise": "definition",
+      "authorName": "苏明远"
+    },
+    "gold-0166": {
+      "firstPerson": false,
+      "topic": "career-transition",
+      "noise": "observer",
+      "authorName": "苏明远"
+    },
+    "gold-0167": {
+      "firstPerson": false,
+      "topic": "ic-to-manager",
+      "noise": "methodology",
+      "authorName": "苏明远"
+    },
+    "gold-0168": {
+      "firstPerson": true,
+      "topic": "ai-transition",
+      "authorName": "苏明远"
+    }
+  },
+  "authors": {
+    "林一舟": {
+      "docCount": 12,
+      "firstPersonTopics": [
+        "ic-to-manager",
+        "ai-transition",
+        "work-life"
+      ],
+      "writtenTopics": [
+        "career-transition",
+        "ic-to-manager",
+        "ai-transition",
+        "work-life",
+        "startup-equity"
+      ]
+    },
+    "苏明远": {
+      "docCount": 12,
+      "firstPersonTopics": [
+        "career-transition",
+        "ai-transition",
+        "work-life"
+      ],
+      "writtenTopics": [
+        "startup-equity",
+        "career-transition",
+        "ic-to-manager",
+        "ai-transition",
+        "work-life"
+      ]
+    },
+    "周叙": {
+      "docCount": 8,
+      "firstPersonTopics": [
+        "startup-equity",
+        "career-transition",
+        "ic-to-manager"
+      ],
+      "writtenTopics": [
+        "work-life",
+        "startup-equity",
+        "career-transition",
+        "ic-to-manager",
+        "ai-transition"
+      ]
+    },
+    "陆文康": {
+      "docCount": 8,
+      "firstPersonTopics": [
+        "work-life",
+        "startup-equity",
+        "career-transition"
+      ],
+      "writtenTopics": [
+        "ai-transition",
+        "work-life",
+        "startup-equity",
+        "career-transition",
+        "ic-to-manager"
+      ]
+    },
+    "郝知远": {
+      "docCount": 8,
+      "firstPersonTopics": [
+        "ic-to-manager",
+        "ai-transition",
+        "career-transition"
+      ],
+      "writtenTopics": [
+        "ic-to-manager",
+        "ai-transition",
+        "work-life",
+        "startup-equity",
+        "career-transition"
+      ]
+    },
+    "沈亦航": {
+      "docCount": 8,
+      "firstPersonTopics": [
+        "ic-to-manager",
+        "ai-transition",
+        "work-life"
+      ],
+      "writtenTopics": [
+        "career-transition",
+        "ic-to-manager",
+        "ai-transition",
+        "work-life",
+        "startup-equity"
+      ]
+    },
+    "陈之遥": {
+      "docCount": 8,
+      "firstPersonTopics": [
+        "work-life"
+      ],
+      "writtenTopics": [
+        "startup-equity",
+        "career-transition",
+        "ic-to-manager",
+        "ai-transition",
+        "work-life"
+      ]
+    },
+    "黄怀瑾": {
+      "docCount": 8,
+      "firstPersonTopics": [
+        "startup-equity",
+        "career-transition",
+        "ic-to-manager"
+      ],
+      "writtenTopics": [
+        "work-life",
+        "startup-equity",
+        "career-transition",
+        "ic-to-manager",
+        "ai-transition"
+      ]
+    },
+    "吴听澜": {
+      "docCount": 8,
+      "firstPersonTopics": [
+        "work-life",
+        "career-transition",
+        "ic-to-manager"
+      ],
+      "writtenTopics": [
+        "ai-transition",
+        "work-life",
+        "startup-equity",
+        "career-transition",
+        "ic-to-manager"
+      ]
+    },
+    "郑既定": {
+      "docCount": 8,
+      "firstPersonTopics": [
+        "ic-to-manager",
+        "work-life",
+        "ai-transition",
+        "startup-equity",
+        "career-transition"
+      ],
+      "writtenTopics": [
+        "ic-to-manager",
+        "ai-transition",
+        "work-life",
+        "startup-equity",
+        "career-transition"
+      ]
+    },
+    "冯临川": {
+      "docCount": 8,
+      "firstPersonTopics": [
+        "career-transition",
+        "ic-to-manager"
+      ],
+      "writtenTopics": [
+        "career-transition",
+        "ic-to-manager",
+        "ai-transition",
+        "work-life",
+        "startup-equity"
+      ]
+    },
+    "许子墨": {
+      "docCount": 8,
+      "firstPersonTopics": [
+        "career-transition",
+        "ai-transition"
+      ],
+      "writtenTopics": [
+        "startup-equity",
+        "career-transition",
+        "ic-to-manager",
+        "ai-transition",
+        "work-life"
+      ]
+    },
+    "何清和": {
+      "docCount": 8,
+      "firstPersonTopics": [
+        "work-life",
+        "career-transition",
+        "ai-transition"
+      ],
+      "writtenTopics": [
+        "work-life",
+        "startup-equity",
+        "career-transition",
+        "ic-to-manager",
+        "ai-transition"
+      ]
+    },
+    "吕砚秋": {
+      "docCount": 8,
+      "firstPersonTopics": [
+        "ai-transition",
+        "startup-equity",
+        "ic-to-manager"
+      ],
+      "writtenTopics": [
+        "ai-transition",
+        "work-life",
+        "startup-equity",
+        "career-transition",
+        "ic-to-manager"
+      ]
+    },
+    "施南舟": {
+      "docCount": 8,
+      "firstPersonTopics": [
+        "startup-equity",
+        "career-transition"
+      ],
+      "writtenTopics": [
+        "ic-to-manager",
+        "ai-transition",
+        "work-life",
+        "startup-equity",
+        "career-transition"
+      ]
+    },
+    "张星野": {
+      "docCount": 8,
+      "firstPersonTopics": [
+        "ai-transition",
+        "ic-to-manager",
+        "work-life",
+        "startup-equity"
+      ],
+      "writtenTopics": [
+        "career-transition",
+        "ic-to-manager",
+        "ai-transition",
+        "work-life",
+        "startup-equity"
+      ]
+    },
+    "孔元朗": {
+      "docCount": 4,
+      "firstPersonTopics": [
+        "career-transition"
+      ],
+      "writtenTopics": [
+        "startup-equity",
+        "career-transition",
+        "ic-to-manager",
+        "ai-transition"
+      ]
+    },
+    "曹亦白": {
+      "docCount": 4,
+      "firstPersonTopics": [
+        "startup-equity"
+      ],
+      "writtenTopics": [
+        "work-life",
+        "startup-equity",
+        "career-transition",
+        "ic-to-manager"
+      ]
+    },
+    "严长风": {
+      "docCount": 4,
+      "firstPersonTopics": [
+        "work-life"
+      ],
+      "writtenTopics": [
+        "ai-transition",
+        "work-life",
+        "startup-equity",
+        "career-transition"
+      ]
+    },
+    "华岁安": {
+      "docCount": 4,
+      "firstPersonTopics": [
+        "ic-to-manager",
+        "ai-transition"
+      ],
+      "writtenTopics": [
+        "ic-to-manager",
+        "ai-transition",
+        "work-life",
+        "startup-equity"
+      ]
+    },
+    "金静观": {
+      "docCount": 4,
+      "firstPersonTopics": [],
+      "writtenTopics": [
+        "career-transition",
+        "ic-to-manager",
+        "ai-transition",
+        "work-life"
+      ]
+    },
+    "魏小满": {
+      "docCount": 4,
+      "firstPersonTopics": [
+        "ai-transition"
+      ],
+      "writtenTopics": [
+        "startup-equity",
+        "career-transition",
+        "ic-to-manager",
+        "ai-transition"
+      ]
+    },
+    "陶砚舟": {
+      "docCount": 4,
+      "firstPersonTopics": [
+        "ic-to-manager"
+      ],
+      "writtenTopics": [
+        "work-life",
+        "startup-equity",
+        "career-transition",
+        "ic-to-manager"
+      ]
+    },
+    "姜知微": {
+      "docCount": 4,
+      "firstPersonTopics": [
+        "work-life"
+      ],
+      "writtenTopics": [
+        "ai-transition",
+        "work-life",
+        "startup-equity",
+        "career-transition"
+      ]
+    }
+  }
+}

@@ -1,7 +1,7 @@
 # DEVELOPER.md · 开发者手册
 
 > 面向本项目开发者（我 + 队友）。目标：**看完这一份就能安全地改代码，不踩已经踩过的坑。**
-> 产品向的介绍看 [README.md](README.md)，当前进度与排期看 [docs/STATUS.md](docs/STATUS.md)。
+> 产品向的介绍看 [README.md](README.md)，当前进度与排期看 `internal/STATUS.md`，纯大白话的交接说明看 `internal/HANDOFF.md`（`internal/` 已被 gitignore，**不随仓库发布**）。
 > 如果你是用 AI 编码助手（Codex / Claude Code）改这个仓库，让助手先读 **[AGENT.md](AGENT.md)** —— 那里是给机器看的硬约束。
 
 ---
@@ -46,55 +46,112 @@ curl -s localhost:3000/api/health | python3 -m json.tool
 | `npm run dev` | 开发服务 |
 | `npm run typecheck` | 类型检查（提交前必跑） |
 | `npm run build` | 生产构建（提交前必跑） |
+| `npm run e2e` | 集成测试 28 项（fixture + 无 LLM，约 3 秒） |
+| `npm run e2e:llm -- --fresh` | 真实模型链路测试（约 45 秒，`--fresh` 会清缓存保证真的调用模型） |
+| `npm run llm:probe` | 模型探针：连通性 + 结构化输出稳定性 |
+| `npm run zhihu:doctor` | 知乎凭证体检（三类凭证 + 回调地址） |
 | `npm run harvest` | 离线预热：抓真实内容落成 fixture |
 | `npm audit` | 应为 `found 0 vulnerabilities` |
 
 ---
 
-## 1. 架构与分层边界
+## 1. 目录结构与分层边界
+
+### 顶层：一眼看出谁是谁的地盘
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ L1 表现层   app/page.tsx · components/*                     │  只消费 AskResult
-├─────────────────────────────────────────────────────────────┤
-│ L2 接口层   app/api/**                                       │  薄 IO：校验 + 取会话 + 限流
-├─────────────────────────────────────────────────────────────┤
-│ L3 业务编排 steps/**           ← 你的业务核心                │  8 个 Step 的顺序 + 入口 runAsk
-├─────────────────────────────────────────────────────────────┤
-│ L4 契约层   domain/types.ts                                  │  只有类型，没有逻辑
-├─────────────────────────────────────────────────────────────┤
-│ L5 框架层   framework/**                                     │  不知道业务是什么
-│     ports · pipeline · cache · quota · datadir · throttle    │
-├─────────────────────────────────────────────────────────────┤
-│ L6 适配层   adapters/**                                      │  知道怎么对接，不知道业务规则
-│     zhihu-http-source · source-fixture · llm · session       │
-│     index.ts  ← 唯一装配根                                    │
-└─────────────────────────────────────────────────────────────┘
+src/
+├── app/       Next.js 路由壳 —— 只转发，不放业务
+├── back/      ★ 后端（主战场）
+├── front/     ★ 前端
+└── shared/    ★ 前后端唯一交接点
 ```
 
-### 三条不可破的边界（代码评审就用这三条）
+`src/app/` 是 Next.js 强制的路由目录，必须存在；但里面**只有壳** ——
+`api/**/route.ts` 把 HTTP 上下文拍平成参数转交 `back/handlers/`，`page.tsx` 转交 `front/pages/`。
 
-1. **`framework/` 里不允许出现任何业务名词。**
-   现在它对外的 API 只有 `Step` / `Pipeline` / `runPipeline` / `ContextDeps`，输入输出都是 `unknown`。
+### 展开
+
+```
+src/
+├── app/                           Next.js 路由壳（不放业务逻辑）
+│   ├── api/ask/route.ts           → back/handlers/ask
+│   ├── api/health/route.ts        → back/handlers/health
+│   ├── api/oauth/status/route.ts  → back/handlers/oauth-status
+│   ├── api/oauth/{authorize,callback,logout}/route.ts
+│   ├── api/image-proxy/route.ts   纯代理，无业务
+│   ├── layout.tsx                 html 骨架 + 引入 front/styles
+│   └── page.tsx                   → front/pages/HomePage
+│
+├── back/                          ★ 后端
+│   ├── steps/                     8 步业务链路 + 入口 runAsk   ← 业务核心
+│   ├── domain/                    后端内部类型 + 实验配置
+│   ├── framework/                 引擎与基础设施（不知道业务是什么）
+│   ├── adapters/                  数据源 / LLM / 会话  ← index.ts 是唯一装配根
+│   ├── handlers/                  路由处理（脱离 Next 也能测）
+│   └── fixtures/                  语料（sample / gold / harvested）
+│
+├── front/                         ★ 前端
+│   ├── pages/HomePage.tsx         页面
+│   ├── components/                组件
+│   ├── api-client.ts              ★ 前端唯一的 fetch 出口
+│   └── styles/globals.css         全局样式
+│
+└── shared/                        ★ 前后端交接点
+    └── contract.ts                端点常量 + 信封 + 所有「过线」的类型
+```
+
+### back 内部的分层
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ L1 routing  app/api/**              薄壳：HTTP ↔ 参数          │
+├──────────────────────────────────────────────────────────────┤
+│ L2 handler  back/handlers/**        校验 / 会话 / 限流         │
+├──────────────────────────────────────────────────────────────┤
+│ L3 业务编排 back/steps/**   ← 你的业务核心                     │
+├──────────────────────────────────────────────────────────────┤
+│ L4 契约     shared/contract.ts      过线的类型（前后端共用）    │
+│             back/domain/types.ts    不过线的类型               │
+├──────────────────────────────────────────────────────────────┤
+│ L5 框架     back/framework/**       不知道业务是什么            │
+├──────────────────────────────────────────────────────────────┤
+│ L6 适配     back/adapters/**        知道怎么对接，不知道业务规则 │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 四条不可破的边界（代码评审就用这四条）
+
+1. **`back/framework/` 里不允许出现任何业务名词。**
+   对外 API 只有 `Step` / `Pipeline` / `runPipeline` / `ContextDeps`，输入输出都是 `unknown`。
    → 好处：想换成 LangGraph，只需替换 `runPipeline` 这个 driver，`steps/` 一行不用改。
 
-2. **`steps/` 里不允许 `import` 任何具体实现类。**
+2. **`back/steps/` 里不允许 `import` 任何具体实现类。**
    只能通过 `ctx.source` / `ctx.llm` / `ctx.cache` / `ctx.quota` 这几个端口访问外部世界。
    → 好处：换数据源、加缓存、换模型，都不需要动业务流程。
 
-3. **`adapters/index.ts` 是唯一的装配根。**
+3. **`back/adapters/index.ts` 是唯一的装配根。**
    换数据源、换模型、调额度策略，只改这一个文件。
    → 反例：不要在某个 step 里 `new ZhihuHttpSource()`。
 
-### 依赖方向
+4. **`front/` 不允许 `import @/back/*`，也不允许直接 `fetch`。**（前后端分工靠这条）
+   只能 `from '@/front/api-client'` 取数据、`from '@/shared/contract'` 取类型。
+   → 好处：后端重构实现时前端零改动；前端只靠契约就能独立开发。
+   → 自查命令（只匹配真正的 import/require，不匹配注释）：
+   ```bash
+   grep -rnE "(from|require\()\s*['\"]@/back" src/front   # 必须无输出
+   ```
+
+### 依赖方向（单向，不允许反向）
 
 ```
-app → steps → domain / framework
-app → adapters ─┐
-steps ─────────┴→ framework/ports（只有接口）
+back  ──┐
+        ├──→  shared        shared 不 import back，也不 import front
+front ──┘
 ```
 
-`framework` 不依赖任何人，`domain` 只依赖 `framework/ports` 的类型。**没有反向依赖，也没有循环依赖。**
+`back` 内部：`handlers → steps → domain / framework`；`adapters` 由装配根注入。
+**没有反向依赖，也没有循环依赖。**
 
 ---
 
@@ -275,10 +332,13 @@ const result = await llmOrFallback<ProblemProfile>(
 |---|---|
 | 全链路（fixture + 无 LLM） | ~110ms |
 | 全链路（缓存全命中） | ~100ms |
-| 全链路（真调 8 次 LLM） | 数秒~十几秒 |
-| `maxDuration` | 60s（`/api/ask`） |
+| **全链路（真实模型冷启动）** | **42.8s**（triage 4.2s + profile 14.0s + events 24.5s，其余 <20ms） |
+| `maxDuration` | 60s（`/api/ask`）—— 余量很薄，见第 10 节警告 |
 
-**没有异步任务队列，也不需要。** 引入 Async Job 会带来状态机、进度轮询、失败重试一大堆非核心复杂度，而当前链路一次请求内能跑完。
+**没有异步任务队列，也不需要。** 但 42.8s 说明「一次请求内跑完」已经接近上限，
+所以两个杠杆要记住：`EXTRACT_MAX_HITS`（控制 LLM 调用条数）和演示前预热缓存。
+**没有超时的出站调用等于没有降级** —— 所有 fetch 都必须走 `fetchWithTimeout`，
+否则 provider 挂住时 `optional` / `llmOrFallback` 永远不会被触发（实测踩过 300 秒挂死）。
 
 ### 4.8 明确不做（scope 边界）
 
@@ -374,37 +434,108 @@ const result = await llmOrFallback<ProblemProfile>(
 
 ---
 
-## 8. 对照实验流程
+## 8. 对照实验流程（✅ 已实现）
 
-这是路演最重要的一页，目前**还没做**。前置是一个小重构：
+**路演最重要的一页**：用数据回答「它比直接用关键词搜索强吗」。
+
+一条命令：
+
+```bash
+npm run gold:build   # 生成 Golden Dataset（168 条语料 + ground truth）
+npm run eval         # 跑 A/B/C 三组，产出 eval/report.md
+npm run eval:llm     # 同上，但用真实 LLM（慢、耗额度，抽取质量真实）
+```
+
+### 配置是数据，不是代码
+
+```ts
+runAsk(question, { experiment: 'A' | 'B' | 'C' })
+```
+
+三组**共用同一个 `runAsk`**，差异全部来自 `src/domain/experiment.ts` 里的 `ExperimentConfig`。
+配置经 `runPipeline(..., { config })` 注入 `StepContext.config`，步骤自行 cast 后取用。
+
+**这是对照实验可信的前提** —— 三组之间不能有任何实现差异，否则你比的不是召回策略，
+而是「两次不同的实现」。
+
+| 版本 | recall | extract | verify | 权重 |
+|---|---|---|---|---|
+| **A** Basline | `keyword` | ✗ | ✗ | 只看 relevance |
+| **B** Basline | `semantic` | ✗ | ✗ | 只看 relevance |
+| **C** Version C | `hybrid`（RRF） | ✓ | ✓ | 7 项完整权重 |
+
+### 关键实现点
+
+**① A/B 关掉抽取后，靠「伪事件」仍能推荐人**（`05-aggregate.ts`）
+
+如果只是把 `events` 置空，A/B 会产出 0 位候选，对照就没法比了。
+所以 A/B 走降级路径：**把召回内容本身当作一条经历**（quote 取正文首句，`firstPerson: false`）。
+这恰好暴露了要打的靶子：**「能找到证据」不等于「这条证据说明他经历过」**。
+
+**② 权重/召回模式必须进 cache key**（`03-recall.ts` / `06-rank.ts`）
+
+否则 A 组跑完，B 组直接读到 A 组的缓存 —— 而 trace 上一切正常（全 `cached`），
+你会得出「调参没区别」的错误结论。
+
+**③ ground truth 与检索语料物理隔离**
+
+`src/fixtures/gold-hits.json`（检索用，**不含** `_gold`）↔ `scripts/gold/labels.json`（仅评测读）。
+一旦搜索引擎能看到「谁是亲历者」，实验就变成作弊。文件级隔离是唯一可靠做法。
+
+**④ 作者级标注必须是 topic 维度**
+
+一位作者写了 5 篇，其中 1 篇关于「期权」是亲历 —— 他对「期权怎么估值」是有效人选，
+对「IC 转管理」不是。只标「有没有亲历过任何事」的话，几乎所有作者都会被标成有效，
+指标就失去区分度了（第一版踩过这个坑）。
+
+### 指标定义
+
+| 指标 | 定义 | 备注 |
+|---|---|---|
+| **Top-3 有效人选率** | 前 3 人里「确实第一人称写过该主题」的比例 | **主指标** |
+| 至少命中 1 位 | Top-3 里有亲历者的比例 | 更抗噪声的二值指标 |
+| 产出覆盖率 | 能为多少问题产出推荐 | Triage 判 `ai`/`content` 会走「别问人」路径，不算失败，故单列 |
+| 证据覆盖率 | 外显理由能逐字回溯的比例 | 只有 C 组做校验，A/B 恒为 0 |
+| 大 V 集中度 | 结果被高赞用户占据的程度 | 健康指标，越低越好 |
+| P95 响应时间 | 95 分位延迟 | 受 `maxDuration=60` 约束 |
+
+### 实测结果（2026-09-12，168 条合成语料 / 20 问题 / `LLM_PROVIDER=none`）
 
 ```
-现在：  runAsk(question: string, opts)
-目标：  runAsk({ question, experiment: 'A' | 'B' | 'C' })
+A 纯关键词    Top-3 有效人选率 68.5%  至少命中1位 88.9%  覆盖率 90.0%
+B 纯语义      Top-3 有效人选率 66.7%  至少命中1位 94.4%  覆盖率 90.0%
+C 完整链路    Top-3 有效人选率 85.2%  至少命中1位 100.0% 覆盖率 90.0%
 ```
 
-配置需要经 `StepContext`（或 `boot`）透传到 `03-recall` 和 `06-rank`。**A/B/C 必须是「同一套代码 + 不同配置」**，否则对照不干净。
+逐问题明细里最有说服力的一条：`q07`/`q09`（都是「IC 转管理」类情境），
+**A 组是 0/3 —— 三个人一个都不对**，因为「管理岗」这个词在职场讨论里太泛，
+纯关键词搜出来的全是方法论文章；C 组拿到 2/3 和 3/3。
 
-| 版本 | 配置 |
-|---|---|
-| **A** Baseline | 只用关键词检索，取前 3 位作者，不做经历抽取 / 校验 |
-| **B** Baseline | 只用向量检索，同样取前 3 位作者 |
-| **C** Version C | 关键词 + 向量 + RRF → 经历抽取 → 重排 → 证据校验（完整链路） |
+### ⚠️ 必须如实声明的局限
 
-**输出指标**（读 `.artifacts/` 或直接读 `AskResult.metrics`）：
+1. **语料是合成的**（`scripts/gold/corpus.mjs`）：ground truth 在生成时写入。
+   验证的是「方法在受控条件下有效」，**不能替代真实数据结论**。
+2. **「有效」判定是上界**：只判断「有没有写过该主题」，不判断内容是否真能回答该问题。
+3. **B 组是弱基线**：默认 embedder 是 hash 投影（词元重合度），不是真语义模型。
+   要可信的 B 组数字需配 `EMBEDDING_BASE_URL` / `EMBEDDING_API_KEY` / `EMBEDDING_MODEL`。
+   C 组的增益主要来自「经历抽取 + 证据校验」，不依赖 embedding 质量。
+4. 真实数据部分（`npm run harvest`）**没有 ground truth**，只能人工抽查，与合成语料分开陈述。
 
-- Top 3 有效人选率（北极星，需要人工标注 Ground Truth）
-- 意外发现率（用户认为「自己搜不到」的比例）
-- 证据覆盖率 / 无证据陈述率
-- 大 V 集中度
-- P95 响应时间
+### 踩过的坑
 
-**Golden Set 建议规模**：20 个真实职场问题 · 30~50 位创作者 · ~250 篇内容 · 人工标注 Ground Truth。
-先用 `npm run harvest` 抓真实内容，再人工标注成 JSON/CSV。
+- **`eval.mjs` 默认不复用已有服务**：端口上是「改代码之前起的」旧进程时，
+  你会在完全不知情的情况下用旧代码跑完评测，然后对着假数据调参。
+  复用必须显式 `--reuse`。（第一版就是这样，指标全错。）
+- **语料模板必须是通顺中文**：无 LLM 时抽取走 `heuristic()`（按「我当时」锚点切句 +
+  逐字摘录）。病句语料会让拼出的 quote 前后不接，被 e2e 的证据不变式逮到。
+- **不要把 `/embeddings` 端点想当然**：「OpenAI 兼容的 chat 端点」≠「有 embeddings 端点」。
+  SenseNova 的 `LLM_BASE_URL` 就没有，自动复用凭证会让 B/C 组 404 崩掉整条请求。
+  现在默认降级到 hash，要用真 embeddings 必须显式配 `EMBEDDING_*`。
 
 ---
 
 ## 9. OAuth 协议偏差
+
 
 以下是官方文档 + 线上实测的结论，`adapters/zhihu-oauth.ts` 已全部处理。**照抄，不要重新发明。**
 
@@ -421,23 +552,76 @@ const result = await llmOrFallback<ProblemProfile>(
 
 ---
 
-## 10. 部署清单
+## 10. 部署与联调 Runbook
 
-以 Vercel 为例：
+真实 OAuth 登录**必须**走这条路 —— `localhost` 无法完成登录，这是平台限制。
 
-- [ ] 代码推到 GitHub（确认 `.env.local` / `.cache/` / `.artifacts/` 没进仓库）
-- [ ] Vercel 导入仓库
-- [ ] Environment Variables 填：`ZHIHU_APP_ID`、`ZHIHU_APP_KEY`、`ZHIHU_ACCESS_SECRET`、`SESSION_SECRET`、`ZHIHU_REDIRECT_URI`、`LLM_PROVIDER`、`LLM_MODEL`
-      **不要**填 `DATA_DIR`（让它自动回退到 `/tmp`）
-- [ ] `ZHIHU_REDIRECT_URI` = `https://<域名>/api/oauth/callback`，并**逐字符**登记到开放平台白名单
-- [ ] 部署后打 `/api/health`：
-  - `configured.accessSecret` / `oauth` / `sessionSecret` 都应为 `true`
-  - `runtime.dataDirWritable` 应为 `true`（会在 `/tmp` 下）
-- [ ] 走一遍完整 OAuth：点「授权知乎账号」→ 授权页**由本人点击确认** → 回到首页看到「已授权」
-- [ ] 检查 `quotaUsedToday` 增长正常
-- [ ] 演示前本地跑一遍要用的示例问题，让缓存预热（**注意：Vercel 上用 /tmp，实例重启就没了 —— 缓存预热只在自建长驻服务上有效**）
+### 第 0 步：本地能验证到哪一步（先做，能省很多时间）
 
-**⚠️ 部署环境与本地环境的关键差异**：serverless 的 `/tmp` 是**每实例、可能随时被回收**的，所以**部署环境下缓存基本不生效**，额度消耗会比本地高。演示时优先用 fixture 模式，或把要演示的问题在本地跑熟。
+```bash
+npm run zhihu:doctor    # 三类凭证齐不齐、回调地址是否合法
+npm run llm:probe       # 模型能不能稳定吐 JSON（结构化输出是本项目的硬依赖）
+npm run e2e             # 28 个用例：链路、防御、证据可回溯（fixture，3 秒）
+npm run e2e:llm -- --fresh   # 真实模型链路（约 45 秒）
+```
+
+`zhihu:doctor` 的诚实结论要记住：**App ID / App Key 在本地无法验证**。
+实测依据（已写进脚本注释）：用伪造 code 打 `/access_token` 时，真实与错误的 App ID
+返回**完全相同**的 `Access denied: not exists`；`/authorize` 也只是 302 跳登录页并原样回显 app_id。
+所以脚本在无法判定时会报「无法判定」，**不会给你一个假通过**。
+
+### 第 1 步：部署拿到公网 HTTPS 域名
+
+Vercel / Cloudflare / Sealos 均可。Vercel 导入 GitHub 仓库即可，无需改构建配置。
+
+Environment Variables 填：
+
+| 变量 | 值 |
+|---|---|
+| `ZHIHU_APP_ID` | 开放平台申请到的 App ID（短数字） |
+| `ZHIHU_OAUTH_APP_KEY` | 与 App ID 一起发放的 OAuth App Key |
+| `ZHIHU_ACCESS_SECRET` | **另一个凭证**，在 developer.zhihu.com/profile 生成 |
+| `SESSION_SECRET` | `openssl rand -hex 32` |
+| `ZHIHU_REDIRECT_URI` | `https://<域名>/api/oauth/callback` |
+| `LLM_PROVIDER` / `LLM_MODEL` / `LLM_BASE_URL` / `LLM_API_KEY` | 模型配置 |
+
+**不要**填 `DATA_DIR` —— serverless 上 `cwd` 只读，代码会自动回退到 `/tmp`。
+
+> ⚠️ `ZHIHU_REDIRECT_URI` 必须与开放平台登记的地址**逐字符一致**，包括结尾有没有斜杠。
+
+### 第 2 步：登记回调地址
+
+到知乎开放平台把 `https://<域名>/api/oauth/callback` 加进回调白名单。
+**这一步没做，点「授权知乎账号」一定会失败。**
+
+### 第 3 步：按顺序验证
+
+```bash
+curl -s https://<域名>/api/health | python3 -m json.tool
+```
+
+- [ ] `configured.oauth` / `accessSecret` / `sessionSecret` 全为 `true`
+- [ ] `runtime.dataDirWritable` 为 `true`（会在 `/tmp` 下）
+- [ ] `GET /api/oauth/status` 里 `credentials.missing` 为空数组
+- [ ] 浏览器点「授权知乎账号」→ **授权页由本人点击确认** → 回到首页看到「已授权 · 昵称」
+- [ ] 回到首页后凭证提示条消失
+- [ ] `quotaUsedToday` 随使用增长
+
+### ⚠️ 部署环境的两个关键差异
+
+1. **`maxDuration` 是硬约束。** 实测真实模型链路冷启动 **42.8s**（triage 4.2s + profile 14.0s + events 24.5s）。
+   Vercel Hobby 上限 60s，**余量很薄**：模型一慢就会 504。
+   缓解优先级：① 部署环境设 `maxDuration = 300`（Pro 才有）→
+   ② 降低 `EXTRACT_MAX_HITS`（当前 4）→ ③ 换更快的模型。
+2. **缓存基本不生效。** serverless 的 `/tmp` 每实例独立且随时可能被回收，
+   所以线上额度消耗远高于本地。**演示前务必在本地把要演示的问题跑一遍预热**，
+   或在演示环境用 `USE_FIXTURES=1`。
+
+### 本地调试 OAuth 的替代方案
+
+如果暂时不想部署，可以起一条隧道拿公网域名（`cloudflared` / `ngrok`）。
+但**回调地址必须登记在开放平台**，而快速隧道的域名每次重启都会变，
+所以更实际的做法还是部署到一个稳定域名。
 
 ---
 
@@ -458,6 +642,75 @@ npm audit                # 必须是 found 0 vulnerabilities
 - [ ] 没有在 `steps/` 里 import 具体实现类
 - [ ] 没有把 `rejectedReasons` 这类内部字段渲染到界面
 - [ ] 没有新增生产依赖（除非有充分理由）
+- [ ] **`npm run publish:check` 通过**（提交公开仓库前必跑，见第 12 节）
+
+---
+
+## 12. 仓库发布范围
+
+这个仓库会作为「代码仓库链接」提交给赛事评审（选交项，但计加分）。所以**发布范围要自觉约束**。
+
+### 会发布
+
+| 内容 | 为什么公开 |
+|---|---|
+| `README.md` | 产品是什么、怎么跑 —— 评审第一眼看的就是它 |
+| `DEVELOPER.md` | 架构与工程边界 —— 工程规范的直接证据 |
+| `AGENT.md` | AI 协作约定 —— 现代工程实践的体现 |
+| `src/` `scripts/` 配置文件 | 代码本身 |
+| `.env.example` | 变量模板（**绝不含真实值**） |
+
+### 不发布（`internal/`，已被 gitignore）
+
+| 内容 | 为什么不公开 |
+|---|---|
+| `internal/HANDOFF.md` | 交接说明，写给团队自己看的 |
+| `internal/STATUS.md` | 进度排期、内部取舍判断 |
+
+**为什么用目录级忽略而不是逐个文件加规则**：`.gitignore` 是只增不减的规则表，
+靠人记住"哪些不能传"一定会漏。把内部资料统一放进 `internal/`，以后新增文档
+不需要改 `.gitignore`，也就不会因为漏一条规则而出事故。
+
+**为什么这两份不公开**：它们是**第二人称、带日期、含内部取舍**的团队自用材料
+（例如「你这块完全没做」「建议不做 X」）。公开仓库应该展示**产品与工程本身**，
+而不是团队的草稿本。对外的路线图摘要已经在 README 里了。
+
+### 强制自检
+
+```bash
+npm run publish:check
+```
+
+它做三件事：
+
+1. **按 `.gitignore` 反推**出真正会被发布的文件清单（规则表是唯一事实源，不会走样）
+2. **读取 `.env.local` 里的真实密钥值，逐个在可发布文件里反查** ——
+   这是主防线。模式匹配只能抓「长得像密钥的东西」，而反查直接回答
+   「我的密钥有没有漏进要公开的文件」，零假设。
+3. 兜一层通用模式扫描（`sk-` 字面量、引号包裹的密钥），防住还没写进 `.env.local` 的凭证。
+
+> ⚠️ 这类检查**必须做投毒验证**才能信。
+> 我们第一版把占位符判定写成 `/^(|your[-_]|...)/`，开头那个**空分支**让正则恒真，
+> 于是每个真实密钥都被当成占位符跳过、反查形同虚设 —— 而脚本照样打印「自检通过」。
+> **给的是假安全感，比没有检查更危险。** 现在「未加载到密钥」会显式报错而不是静默跳过。
+
+### 关于 git 历史
+
+删掉文件**不会**把它从历史里移除。判断方法：
+
+```bash
+git log --all --oneline -- <被删文件>     # 有输出说明历史里还在
+```
+
+如果这个仓库**从未推送过**，最干净的做法是重新开始（能拿到一个完全干净的首次提交）：
+
+```bash
+rm -rf .git && git init && git add -A && git commit -m "feat: 知乎问人 —— 让 AI 知道什么时候该把问题还给人"
+git status --short        # 确认 .env.local / internal/ 都不在待提交列表里
+```
+
+**如果已经推送过**，删文件不够，需要重写历史（`git filter-repo`）**并且轮换所有泄露过的凭证** ——
+后者更重要：一旦密钥进过公开仓库，就要当作已泄露处理。
 
 ---
 

@@ -11,7 +11,7 @@
  *   node --env-file=.env.local scripts/harvest.mjs
  *   node --env-file=.env.local scripts/harvest.mjs "自定义查询1" "自定义查询2"
  *
- * 输出：src/fixtures/harvested-hits.json
+ * 输出：src/back/fixtures/harvested-hits.json
  * 之后把 FixtureSource 指到它即可离线跑（见 README「预热与离线演示」）。
  */
 
@@ -20,7 +20,7 @@ import path from 'node:path';
 
 const BASE = (process.env.ZHIHU_API_BASE || 'https://developer.zhihu.com').replace(/\/$/, '');
 const SECRET = process.env.ZHIHU_ACCESS_SECRET;
-const OUT = path.resolve(process.cwd(), 'src/fixtures/harvested-hits.json');
+const OUT = path.resolve(process.cwd(), 'src/back/fixtures/harvested-hits.json');
 
 /** 默认种子查询：围绕 demo 要讲的三个场景铺开 */
 const DEFAULT_SEEDS = [
@@ -69,7 +69,7 @@ function mapItem(item) {
   return {
     title: item.Title ?? '',
     contentType: item.ContentType ?? '',
-    contentId: item.ContentID ?? '',
+    contentId: item.ContentID == null ? '' : String(item.ContentID),
     contentText: item.ContentText ?? '',
     url: item.Url ?? '',
     commentCount: item.CommentCount ?? 0,

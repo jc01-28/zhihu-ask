@@ -27,7 +27,7 @@ export function AuthGate({
               问
             </span>
             <div>
-              <p className="text-base font-bold tracking-tight">知乎问人</p>
+              <p className="text-base font-bold tracking-tight">知域</p>
               <p className="text-xs text-muted-foreground">找到真正经历过的人</p>
             </div>
           </Link>

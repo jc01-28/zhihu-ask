@@ -139,7 +139,7 @@ describe("恢复与错误状态", () => {
 
     expect(await screen.findByText("重置失败，请稍后重试。")).toBeInTheDocument();
     // 旧消息仍在
-    expect(screen.getByText(/我是通过「知乎问人」看到你的/)).toBeInTheDocument();
+    expect(screen.getByText(/我是通过「知域」看到你的/)).toBeInTheDocument();
   });
 
   it("未发送草稿会被保存，reset 后清空", async () => {

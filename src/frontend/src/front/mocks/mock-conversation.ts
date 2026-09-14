@@ -73,7 +73,7 @@ export function buildInitialMessages(
       conversationId,
       clientMessageId: null,
       sender: "seeker",
-      content: "你好，我是通过「知乎问人」看到你的。你的经历和我正在考虑的问题很接近。",
+      content: "你好，我是通过「知域」看到你的。你的经历和我正在考虑的问题很接近。",
       createdAt: mockTimestamp(offsetSeconds + 1),
     },
     {

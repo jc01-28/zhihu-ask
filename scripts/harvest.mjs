@@ -8,12 +8,14 @@
  * 这样现场演示不会因为网络抖动、额度耗尽、接口临停而失败。
  *
  * 用法：
- *   node --env-file=.env.local scripts/harvest.mjs
- *   node --env-file=.env.local scripts/harvest.mjs "自定义查询1" "自定义查询2"
+ *   node scripts/harvest.mjs
+ *   node scripts/harvest.mjs "自定义查询1" "自定义查询2"
  *
  * 输出：src/back/fixtures/harvested-hits.json
  * 之后把 FixtureSource 指到它即可离线跑（见 README「预热与离线演示」）。
  */
+
+import './load-env.mjs';
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';

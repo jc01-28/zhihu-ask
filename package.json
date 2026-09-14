@@ -11,9 +11,9 @@
     "e2e:llm": "node scripts/e2e.mjs --live-llm",
     "e2e:throttle": "node scripts/e2e.mjs --with-throttle",
     "publish:check": "node scripts/publish-check.mjs",
-    "llm:probe": "node --env-file=.env.local scripts/llm-probe.mjs",
-    "zhihu:doctor": "node --env-file=.env.local scripts/zhihu-doctor.mjs",
-    "harvest": "node --env-file=.env.local scripts/harvest.mjs",
+    "llm:probe": "node scripts/llm-probe.mjs",
+    "zhihu:doctor": "node scripts/zhihu-doctor.mjs",
+    "harvest": "node scripts/harvest.mjs",
     "gold:build": "node scripts/gold/build.mjs",
     "eval": "node scripts/eval.mjs",
     "eval:llm": "node scripts/eval.mjs --live-llm"

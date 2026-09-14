@@ -9,9 +9,11 @@
  *   所以先单独把「模型能不能稳定吐 JSON」这件事测掉。
  *
  * 用法：
- *   node --env-file=.env.local scripts/llm-probe.mjs
- *   node --env-file=.env.local scripts/llm-probe.mjs --rounds 3
+ *   node scripts/llm-probe.mjs
+ *   node scripts/llm-probe.mjs --rounds 3
  */
+
+import './load-env.mjs';
 
 const BASE = (process.env.LLM_BASE_URL || '').replace(/\/$/, '');
 const KEY = process.env.LLM_API_KEY || '';

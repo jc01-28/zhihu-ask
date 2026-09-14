@@ -18,8 +18,12 @@
  *
  * 全程不需要浏览器、不需要公网回调 —— 这是本地能做的最大程度的验证。
  *
- * 用法：node --env-file=.env.local scripts/zhihu-doctor.mjs
+ * 用法：node scripts/zhihu-doctor.mjs
+ *
+ * 注：环境变量由 ./load-env.mjs 自己加载（不依赖 `node --env-file`，那需要 Node 20+）。
  */
+
+import './load-env.mjs';
 
 const BASE = (process.env.ZHIHU_API_BASE || 'https://developer.zhihu.com').replace(/\/$/, '');
 const APP_ID = process.env.ZHIHU_APP_ID || '';

@@ -5,7 +5,11 @@ import { handleAgentSearch } from '@/back/handlers/agent';
 import type { SearchAgentEvent } from '@/shared/contract';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+// 为什么是 300 而不是 60：真实链路冷启动实测 42.8s（triage 4.2 + profile 14.0 + events 24.5，
+// 见 DEVELOPER.md「部署环境的两个关键差异」），模型稍慢就会撞上 60s 上限，
+// 函数在超时尚未完成 → 平台掐断流 → 前端只能报「连接中断，没有收到完整结果」。
+// Vercel 自 2025-04 起默认启用 Fluid 计算，单体上限放宽到 300s（Hobby 亦同），因此这里抬高上限。
+export const maxDuration = 300;
 
 /**
  * 问题找人 —— **NDJSON 流式**。路由壳，业务在 `@/back/handlers/agent`。

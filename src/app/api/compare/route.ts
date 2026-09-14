@@ -5,7 +5,8 @@ import { clientKey } from '@/back/framework/throttle';
 import { handleCompare } from '@/back/handlers/agent';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+// 对比接口把整条链路跑两遍（原文侧 + Agent 侧），比单次搜索更需要上限余量。
+export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
 /**

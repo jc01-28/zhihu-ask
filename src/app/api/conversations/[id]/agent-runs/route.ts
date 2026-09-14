@@ -3,7 +3,8 @@ import { runConversationAgent } from '@/back/handlers/conversations';
 import type { ConversationAgentEvent } from '@/shared/contract';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+// 会话内 Agent 也要读证据 + 调模型，与搜索同步抬高到 300。
+export const maxDuration = 300;
 
 /**
  * 会话内 Agent —— **NDJSON 流式**。路由壳，业务在 `@/back/handlers/conversations`。

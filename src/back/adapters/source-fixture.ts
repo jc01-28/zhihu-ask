@@ -79,7 +79,7 @@ export interface FixtureComposition {
  *   2. 真实语料与虚构语料**不能混着给用户看**。混在一起的结果是页面上同时出现真实作者
  *      和「林一舟」这种编出来的名字，看起来像 bug。所以用 FIXTURE_CORPUS 做隔离。
  */
-function loadDb(): FixtureFile & { composition: FixtureComposition } {
+function loadDb(): FixtureFile & { composition: FixtureComposition; harvestedHits: SearchHit[] } {
   const base = baseData as unknown as FixtureFile;
   const gold = (goldData as unknown as { hits?: SearchHit[] }).hits ?? [];
   const harvested = loadHarvested();
@@ -107,6 +107,15 @@ function loadDb(): FixtureFile & { composition: FixtureComposition } {
     // 关注 / 热榜 / 本人创作仍取自 sample-hits.json（fixture 占位数据，与检索语料无关）
     ...base,
     hits: [...byId.values()],
+    /**
+     * **未按 scope 过滤**的真实语料，领域星图专用（见 `enumerateRealCorpus`）。
+     *
+     * ⚠️ 别和下面的 `composition.real` 搞混：
+     *   harvestedHits    = 真实语料**一共有**多少条（与 scope 无关）
+     *   composition.real = 当前检索**实际用了几条**真实内容（随 scope 变）
+     * 领域星图要的是前者 —— 否则 `FIXTURE_CORPUS=synthetic` 时星图会全空（踩过）。
+     */
+    harvestedHits: [...harvested],
     composition: {
       scope,
       synthetic: syntheticHits.length,
@@ -161,6 +170,17 @@ export class FixtureSource implements ContentSource {
    */
   async enumerateCorpus(limit = 500): Promise<SearchHit[]> {
     return db.hits.slice(0, limit).map((h) => ({ ...h }));
+  }
+
+  /**
+   * 只枚举**真实**语料 —— 领域星图专用。
+   *
+   * 与 `enumerateCorpus` 的区别：它**无视 `FIXTURE_CORPUS`**，永远只回 harvested 的真实内容。
+   * 原因见 `ContentSource.enumerateRealCorpus` 的注释：星图上出现虚构作者，
+   * 「证据驱动」这个内核就废了，而且演示时没人能当场分辨哪个名字是编的。
+   */
+  async enumerateRealCorpus(limit = 500): Promise<SearchHit[]> {
+    return db.harvestedHits.slice(0, limit).map((h) => ({ ...h }));
   }
 
   async hotList(limit = 20): Promise<HotItem[]> {

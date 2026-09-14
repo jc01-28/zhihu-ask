@@ -1,10 +1,11 @@
-import HomePage from '@/front/pages/HomePage';
+import ProjectIntroPage from '@/front/pages/ProjectIntroPage';
 
 /**
- * ⚠️ 这是 Next.js 的**路由壳**，不是页面实现。
- * 真正的页面在 `src/front/pages/HomePage.tsx`（前端的地盘）。
- * 这样 `src/app/` 里一眼看过去只有路由，不会有业务代码混在里面。
+ * 路由壳 —— 页面实现在 `src/front/pages/ProjectIntroPage.tsx`。
+ *
+ * `/` 是**项目推荐页**（前端规格里的页面一）：只介绍项目、给两个跳转按钮，
+ * 不做任何业务操作，也没有登录状态。功能全部在 `/app/*` 下。
  */
 export default function Page() {
-  return <HomePage />;
+  return <ProjectIntroPage />;
 }

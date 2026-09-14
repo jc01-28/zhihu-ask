@@ -114,7 +114,7 @@ export function pickAuthorizationCode(params: URLSearchParams): string | null {
 export async function exchangeCode(
   config: OAuthConfig,
   code: string,
-): Promise<{ accessToken: string; expiresIn: number }> {
+): Promise<{ accessToken: string; expiresIn: number; tokenType: string | null }> {
   const form = new URLSearchParams();
   form.set('app_id', config.appId);
   form.set('app_key', config.appKey);
@@ -137,6 +137,8 @@ export async function exchangeCode(
   const data = JSON.parse(text) as {
     access_token?: string;
     expires_in?: number;
+    /** 目前实测是 Bearer；留字段是为了能识别出非预期类型并明确报错 */
+    token_type?: string;
     code?: number;
     data?: string;
   };
@@ -149,5 +151,6 @@ export async function exchangeCode(
   return {
     accessToken: data.access_token,
     expiresIn: data.expires_in ?? 3600,
+    tokenType: data.token_type ?? null,
   };
 }

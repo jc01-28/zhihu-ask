@@ -58,6 +58,23 @@ const BASE = `http://127.0.0.1:${PORT}`;
 /** 每个请求的超时。per-hit 抽取 + LLM 时可能到 60s，给足余量 */
 const REQUEST_TIMEOUT_MS = Number(arg('timeout', 180000));
 
+/**
+ * 兜底看门狗。**默认 5 分钟**（可以用 --watchdog 调大）。
+ *
+ * 为什么需要它：收尾逻辑一旦卡住（关服务、写文件、句柄没释放），脚本会「假装还在跑」——
+ * 实测有任务因此挂了 **2 小时 12 分**，而报告其实早在第 1 分钟就写好了。
+ * 定时器用 unref：它**不会**延长进程寿命，但只要进程还活着就一定会到点强制退出。
+ *
+ * 正常一轮（fixture + 无 LLM）约 40~70 秒，5 分钟是很宽的余量。
+ * 跑 --live-llm 时请显式调大：npm run eval -- --live-llm --watchdog 1800
+ */
+const WATCHDOG_MS = Number(arg('watchdog', 300)) * 1000;
+setTimeout(() => {
+  console.error(`\n⚠️ 已超过 ${WATCHDOG_MS / 1000}s 仍未结束，强制退出以免进程挂死。`);
+  console.error('   若这是 --live-llm 的正常耗时，请调大：npm run eval -- --watchdog 1800');
+  process.exit(2);
+}, WATCHDOG_MS).unref();
+
 // ── 标注加载 ────────────────────────────────────────────────────────────
 
 async function loadLabels() {
@@ -88,7 +105,7 @@ async function ask(question, experiment) {
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const startedAt = Date.now();
   try {
-    const res = await fetch(`${BASE}/api/ask`, {
+    const res = await fetch(`${BASE}/api/agent/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, experiment }),
@@ -433,14 +450,52 @@ async function main() {
     console.log('报告：eval/report.md');
     console.log('原始：eval/raw.json');
   } finally {
-    if (server) {
-      server.kill();
-      console.log('\n已停止 dev server');
-    }
+    await stopServer(server);
   }
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+/**
+ * 关掉被测服务。**必须杀整棵进程树**，不能只 `child.kill()`。
+ *
+ * 踩过的坑（代价：一个后台任务挂了 2 小时 12 分）：
+ * `startServer()` 用 `spawn(..., { shell: true })` 起的是 cmd/npx 包装进程，
+ * 真正的 `next dev` 是它的孙进程。只杀包装进程会留下 next 继续占端口，
+ * 而且它的 stdout/stderr 管道一直开着 —— 父进程的事件循环因此永不空转结束。
+ * 结果极具误导性：报告文件早写好了、控制台也打了「已停止 dev server」，
+ * 但任务一直显示「运行中」。
+ *
+ * ⚠️ 这里刻意用**异步 spawn 而不是 spawnSync**：收尾阶段任何阻塞都可能让进程挂死。
+ * 而且 spawnSync 找不到命令时只是返回 error、不会抛，静默失败反而更难查。
+ */
+async function stopServer(child) {
+  if (!child) return;
+
+  if (process.platform === 'win32') {
+    await new Promise((resolve) => {
+      const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+        stdio: 'ignore',
+      });
+      const done = () => resolve();
+      killer.on('close', done);
+      killer.on('error', done);
+      // 保险：taskkill 自己卡住也不能拖死我们
+      setTimeout(done, 3000).unref?.();
+    });
+  } else {
+    child.kill('SIGTERM');
+  }
+
+  // 显式断开管道，确保没有任何句柄继续挂住父进程
+  child.stdout?.destroy();
+  child.stderr?.destroy();
+  child.unref?.();
+  console.log('\n已停止 dev server');
+}
+
+main()
+  // 兜底：即使还有句柄没释放，也一定让进程退出
+  .then(() => process.exit(0))
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });

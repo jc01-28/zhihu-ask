@@ -1,15 +1,11 @@
-import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
-import { SESSION_COOKIE } from '@/back/adapters/session';
-import { handleOAuthStatus } from '@/back/handlers/oauth-status';
-
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/** 路由壳：业务在 `@/back/handlers/oauth-status` */
-export async function GET() {
-  const result = await handleOAuthStatus({
-    sessionToken: (await cookies()).get(SESSION_COOKIE)?.value,
-  });
-  return NextResponse.json(result.body, { status: result.status, headers: result.headers });
-}
+/**
+ * @deprecated 已迁移到 `GET /api/auth/session`。
+ *
+ * 字段也变了：`authorized` → `authenticated`，且把「凭证是否配齐」
+ * 从嵌套的 `credentials.ready` 提成平级的 `configured` ——
+ * 前端三分支判断因此不用再往下钻两层。
+ */
+export { GET } from '@/app/api/auth/session/route';

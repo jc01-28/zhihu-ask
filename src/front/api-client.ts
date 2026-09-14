@@ -14,10 +14,14 @@
 
 import {
   API_ROUTES,
+  fieldGraphPath,
   type AskRequest,
-  type AskResult,
+  type AskResponse,
+  type AuthSessionResponse,
+  type FieldGraphResponse,
+  type FieldSearchResponse,
+  type FieldSummary,
   type HealthResponse,
-  type OAuthStatusResponse,
 } from '@/shared/contract';
 
 /**
@@ -48,18 +52,26 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return env.data as T;
 }
 
-/** 一次提问 → 完整推荐结果。experiment 只在演示对照实验时传。 */
-export function ask(payload: AskRequest, signal?: AbortSignal): Promise<AskResult> {
-  return request<AskResult>(API_ROUTES.ask, {
+/**
+ * 一次提问 → 完整推荐结果（含六阶段进度）。
+ * `experiment` 只在演示对照实验时传，平时留空走默认组。
+ */
+export function ask(payload: AskRequest, signal?: AbortSignal): Promise<AskResponse> {
+  return request<AskResponse>(API_ROUTES.agentSearch, {
     method: 'POST',
     body: JSON.stringify(payload),
     signal,
   });
 }
 
-/** 授权状态 + 凭证自查 + 当日额度 */
-export function fetchOAuthStatus(): Promise<OAuthStatusResponse> {
-  return request<OAuthStatusResponse>(API_ROUTES.oauthStatus, { cache: 'no-store' });
+/**
+ * 登录状态。前端三分支全靠它：
+ *   configured=false → 服务端未配置授权
+ *   authenticated=false → 显示授权入口
+ *   authenticated=true → 显示功能首页
+ */
+export function fetchAuthSession(): Promise<AuthSessionResponse> {
+  return request<AuthSessionResponse>(API_ROUTES.session, { cache: 'no-store' });
 }
 
 /** 健康检查。演示前用它确认当前在跑哪份语料。 */
@@ -67,10 +79,41 @@ export function fetchHealth(): Promise<HealthResponse> {
   return request<HealthResponse>(API_ROUTES.health, { cache: 'no-store' });
 }
 
-/** 发起 OAuth 授权（整页跳转，不是 fetch） */
-export const oauthAuthorizeUrl = API_ROUTES.oauthAuthorize;
+/** 发起授权：**整页跳转，不是 fetch**（用 window.location.assign） */
+export const authLoginUrl = API_ROUTES.login;
+
+/** 退出登录：同样是整页跳转，退出后会被 302 回 /app?auth=required */
+export const authLogoutUrl = API_ROUTES.logout;
 
 /** 头像走同源代理，避免知乎图床的跨域/防盗链问题 */
 export function imageProxyUrl(raw: string): string {
   return `${API_ROUTES.imageProxy}?url=${encodeURIComponent(raw)}`;
+}
+
+// ── 领域域（专业领域社交）────────────────────────────────────────────────
+
+/**
+ * 推荐领域。返回顺序是产品定的展示顺序，**不要在前端重排**。
+ *
+ * `memberCount` / `topicCount` 是后端从真实语料算出来的，会随语料变化；
+ * 演示前打 `/api/health` 可以看到当前跑的是哪份语料。
+ */
+export function fetchFeaturedFields(): Promise<FieldSummary[]> {
+  return request<FieldSummary[]>(API_ROUTES.fieldsFeatured, { cache: 'no-store' });
+}
+
+/**
+ * 领域搜索。
+ *
+ * ⚠️ 两件事：① 返回的是 `{ fields, total }` 不是数组（`total` 可能大于 `fields.length`）；
+ * ② **只搜领域，不返回人物** —— 想找人请用 `ask()`，那是另一条路径。
+ */
+export function searchFields(query: string, limit = 12): Promise<FieldSearchResponse> {
+  const qs = new URLSearchParams({ query, limit: String(limit) });
+  return request<FieldSearchResponse>(`${API_ROUTES.fields}?${qs}`, { cache: 'no-store' });
+}
+
+/** 领域星图。节点的 `position` 后端已经算好，前端等比缩放到容器即可 */
+export function fetchFieldGraph(fieldId: string): Promise<FieldGraphResponse> {
+  return request<FieldGraphResponse>(fieldGraphPath(fieldId), { cache: 'no-store' });
 }

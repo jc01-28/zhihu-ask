@@ -148,18 +148,203 @@ export interface AskResult {
   runId: string;
 }
 
+/**
+ * `/api/agent/search` 的**对外响应** = 链路产物 + 展示层聚合。
+ *
+ * 为什么把 `phases` 放在这一层而不是塞进 `AskResult`：
+ *   - `AskResult` 是**链路产物**，由 `08-explain` 构造，e2e 与评测都对着它断言 → 不该动
+ *   - `phases` 是**展示口径**（6 阶段），由 handler 层从 `trace` 映射而来
+ * 这样"改展示"和"改链路"彻底解耦：调阶段划分不需要重跑任何链路验证。
+ */
+export interface AskResponse extends AskResult {
+  phases: AgentPhase[];
+}
+
+/** ── 领域域（专业领域社交）────────────────────────────────────────────── */
+
+/**
+ * 领域摘要。
+ *
+ * `memberCount` / `topicCount` 是**算出来的**，不是写死的 —— 它们来自
+ * 「真实内容挂载到议题 → 聚合到作者」的结果，所以会随语料变化。
+ * 领域本身（名称/简介/标签/关键词）是人工定义的，那是产品叙事，必须可控。
+ */
+export interface FieldSummary {
+  id: string;
+  name: string;
+  description: string;
+  /** 图标：用 emoji 或短字符，前端自行决定怎么渲染 */
+  icon: string | null;
+  /** 主题色（十六进制）。规格要求「不同专业领域可以使用不同主题色」 */
+  color: string;
+  tags: string[];
+  memberCount: number;
+  topicCount: number;
+}
+
+export interface TopicNode {
+  id: string;
+  name: string;
+  description: string;
+  /**
+   * 画布坐标。**坐标系约定：0~1000 的正方形，中心 (500,500) 是领域中心节点。**
+   * 前端按容器尺寸等比缩放即可，不需要自己算布局。
+   */
+  position: { x: number; y: number };
+  memberCount: number;
+}
+
+export interface PersonNode {
+  id: string;
+  name: string;
+  headline: string;
+  avatarUrl: string | null;
+  /** 头像占位字：取名字首字（中文）或首字母（英文） */
+  initial: string;
+  /** 头像底色。由 id 哈希决定 —— 同一个人在任何页面颜色都一样 */
+  avatarTone: string;
+  topicIds: string[];
+  /** 与该领域的相关度 0~1，规格里用它决定头像大小 */
+  relevance: number;
+  /**
+   * 画布坐标（与 TopicNode 同一坐标系）。
+   *
+   * ⚠️ 规格给的 PersonNode 里**没有**这个字段，这里是**超集**：
+   * 位置由后端确定性算好，前端可以直接画；想自己按 topicIds 环绕排布也完全可以。
+   * 之所以还是给出来 —— 「确定性布局」放在后端，前端就不用为移动端降级再实现一套。
+   */
+  position: { x: number; y: number };
+}
+
+export interface FieldGraphResponse {
+  field: FieldSummary;
+  topics: TopicNode[];
+  people: PersonNode[];
+}
+
+export interface FieldSearchResponse {
+  /** 命中的领域。**领域搜索只返回领域，永远不直接返回人物** —— 这是两个功能的边界 */
+  fields: FieldSummary[];
+  /** 命中总数（可能大于 fields.length，因为 limit 会截断） */
+  total: number;
+}
+
+
+
 /** ── 端点与信封 ──────────────────────────────────────────────────────── */
 
 /** 全部对外端点。前端不要硬编码路径，统一从这里取。 */
 export const API_ROUTES = {
+  /** ── 授权域（前端规格写的是 /api/auth/*，我们按它对齐）── */
+  /** 登录状态：configured / authenticated / user */
+  session: '/api/auth/session',
+  /** 发起知乎授权：整页跳转，不是 fetch */
+  login: '/api/auth/zhihu/login',
+  /** 知乎回调。⚠️ 这个路径必须与 ZHIHU_REDIRECT_URI 逐字符一致 */
+  callback: '/api/auth/zhihu/callback',
+  /** 退出登录 */
+  logout: '/api/auth/zhihu/logout',
+
+  /** ── 业务域 ── */
+  /** 问题找人（一次返回）。规格里叫 /api/agent/search，后续会升级为 NDJSON 流式 */
+  agentSearch: '/api/agent/search',
+  /** @deprecated 旧路径，保留兼容；新代码请用 agentSearch */
   ask: '/api/ask',
+
+  /** ── 领域域（专业领域社交）── */
+  /** 推荐领域列表 */
+  fieldsFeatured: '/api/fields/featured',
+  /** 领域搜索：`?query=训练大模型&limit=12` */
+  fields: '/api/fields',
+
+  /** ── 系统 ── */
   health: '/api/health',
-  oauthAuthorize: '/api/oauth/authorize',
-  oauthCallback: '/api/oauth/callback',
-  oauthStatus: '/api/oauth/status',
-  oauthLogout: '/api/oauth/logout',
   imageProxy: '/api/image-proxy',
 } as const;
+
+/** 领域星图路径。带路径参数，所以是函数而不是常量 */
+export const fieldGraphPath = (fieldId: string): string =>
+  `${API_ROUTES.fields}/${encodeURIComponent(fieldId)}/graph`;
+
+/**
+ * 授权错误码。
+ *
+ * 为什么要枚举而不是直接给文案：前端要按不同错误显示不同引导
+ * （没配置 → 告诉运维；state 对不上 → 提示重试；换 token 失败 → 提示稍后再试）。
+ * 让前端猜文案就等于把后端语义复制一份到前端，迟早不一致。
+ */
+export type AuthErrorCode =
+  /** 服务端 OAuth 凭证没配齐 —— 前端显示「服务端未配置知乎授权」 */
+  | 'unconfigured'
+  /** 需要授权才能访问 —— 引导用户点授权按钮 */
+  | 'required'
+  /** 回调里没有授权码 */
+  | 'code_missing'
+  /** 回调没带 state（知乎不保证回传，见 DEVELOPER.md §9） */
+  | 'state_missing'
+  /** state 与 cookie 对不上，疑似 CSRF */
+  | 'state_mismatch'
+  /** 返回的 token 类型不是我们支持的那种 */
+  | 'token_type_unsupported'
+  /** 用 code 换 token 失败（凭证错 / code 过期 / 网络） */
+  | 'exchange_failed';
+
+export interface AuthUser {
+  name: string | null;
+  headline: string | null;
+  url: string | null;
+  avatarUrl: string | null;
+}
+
+/**
+ * `GET /api/auth/session` 的响应。
+ *
+ * 前端的三分支逻辑完全由它决定（不要在页面上拼状态）：
+ *   configured=false                       → 显示「服务端未配置知乎授权」
+ *   configured=true && authenticated=false → 显示授权入口
+ *   authenticated=true                     → 显示功能首页
+ */
+export interface AuthSessionResponse {
+  /** 服务端 OAuth 凭证是否齐备（三项：App ID / App Key / 回调地址） */
+  configured: boolean;
+  /** 用户是否已完成知乎授权 */
+  authenticated: boolean;
+  /** 公开用户信息。知乎 /user 没有正式 schema，字段可能全为空 */
+  user: AuthUser | null;
+  /** configured=false 时缺哪些凭证，直接显示给开发者看 */
+  missing: string[];
+  /** 回调地址是否本地地址 —— 是的话知乎永远回调不了，只能预览页面 */
+  redirectIsLocalOnly: boolean;
+  /** 会话剩余有效秒数 */
+  expiresInSeconds: number;
+}
+
+/** ── 六阶段进度 ────────────────────────────────────────────────────────── */
+
+/**
+ * 前端规格要的是 **6 个阶段**，而我们的链路是 **8 步**。
+ *
+ * 这里刻意把「链路口径」和「展示口径」分开：
+ *   - `AskResult.trace` 保留 8 步原貌 —— e2e 与评测都指着它，不能动
+ *   - `AskResult.phases` 是给界面看的 6 阶段聚合
+ * 映射关系见 `back/domain/phases.ts`。改展示口径不需要碰核心链路。
+ */
+export type AgentPhaseId =
+  | 'context'
+  | 'understand'
+  | 'retrieve'
+  | 'verify'
+  | 'compose'
+  | 'persist';
+
+export interface AgentPhase {
+  id: AgentPhaseId;
+  label: string;
+  status: 'pending' | 'running' | 'ok' | 'cached' | 'skipped' | 'failed';
+  ms: number;
+  summary: string;
+}
+
 
 /**
  * 统一响应信封。**所有 `/api/*` 端点**都返回这个形状（含 `/api/health`）：
@@ -183,6 +368,14 @@ export interface AskRequest {
   experiment?: ExperimentId;
 }
 
+/**
+ * @deprecated 已被 `AuthSessionResponse` 取代。
+ *
+ * 旧接口 `GET /api/oauth/status` 的响应形状：字段名是 `authorized`，
+ * 且把「凭证是否配齐」和「是否已授权」混在一个 `credentials` 子对象里。
+ * 新口径按前端规格拆成**两个平级布尔**（`configured` / `authenticated`），
+ * 前端三分支判断更直接。这里保留仅为兼容旧路由，新代码不要用。
+ */
 export interface OAuthStatusResponse {
   authorized: boolean;
   note: string;

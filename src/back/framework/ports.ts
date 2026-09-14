@@ -107,6 +107,20 @@ export interface ContentSource {
    * 不实现该方法的源 = 不支持枚举。
    */
   enumerateCorpus?(limit: number): Promise<SearchHit[]>;
+  /**
+   * 只枚举**真实**语料（不含合成 / 虚构内容）。
+   *
+   * 领域星图专用。理由：那里展示的是「**谁真的写过这个话题**」——
+   * 一旦出现虚构作者（合成语料里的「林一舟」这种），整个「证据驱动」的内核就废了，
+   * 而且演示时没人能当场分辨哪个名字是编的。
+   *
+   * 所以它**不受 `FIXTURE_CORPUS` 影响**：那个开关是为了隔离对照实验的语料，
+   * 而领域域跟对照实验毫无关系。
+   *
+   * fixture 源实现它；HTTP 源不需要（它本来就全是真实内容），
+   * 所以在线模式下用 `searchContents` 兜底。
+   */
+  enumerateRealCorpus?(limit: number): Promise<SearchHit[]>;
   hotList(limit?: number): Promise<HotItem[]>;
   /** 需要 OAuth 授权，查当前授权用户的关注列表 */
   myFollowees(limit?: number): Promise<Followee[]>;

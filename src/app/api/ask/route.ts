@@ -1,29 +1,12 @@
-import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
-import { SESSION_COOKIE } from '@/back/adapters/session';
-import { clientKey } from '@/back/framework/throttle';
-import { handleAsk } from '@/back/handlers/ask';
+import { askRoute } from '@/app/api/_ask-route';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 /**
- * ⚠️ 这是**路由壳**：只把 HTTP 上下文拍平成参数，业务在 `@/back/handlers/ask`。
- * 不要在这一层写业务逻辑 —— 写了就没法脱离 Next 做测试。
+ * @deprecated 已迁移到 `POST /api/agent/search`（采用前端规格的命名）。
+ *
+ * 这个路径保留**只是为了兼容既有脚本**（`scripts/e2e.mjs`、`scripts/eval.mjs` 直接打它）。
+ * 新代码一律用 `/api/agent/search`。等脚本都切过去后，这个文件可以删掉。
  */
-export async function POST(request: Request) {
-  // JSON 解析失败不在这里处理，交给 handler 统一回信封（body: null）
-  let body: { question?: unknown; experiment?: unknown } | null = null;
-  try {
-    body = (await request.json()) as { question?: unknown; experiment?: unknown };
-  } catch {
-    body = null;
-  }
-
-  // Next 15 起 cookies() 变成异步 API，必须 await
-  const sessionToken = (await cookies()).get(SESSION_COOKIE)?.value;
-
-  const result = await handleAsk({ body, sessionToken, clientKey: clientKey(request) });
-
-  return NextResponse.json(result.body, { status: result.status, headers: result.headers });
-}
+export const POST = askRoute;

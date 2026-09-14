@@ -9,9 +9,11 @@
  */
 
 import { resolveExperiment, type ExperimentId } from '@/back/domain/experiment';
+import { toPhases } from '@/back/domain/phases';
 import { openSession } from '@/back/adapters/session';
 import { MemoryThrottle } from '@/back/framework/throttle';
 import { runAsk } from '@/back/steps';
+import type { AskResponse } from '@/shared/contract';
 import { fail, ok, tooMany, type HandlerResult } from './types';
 
 /**
@@ -26,8 +28,15 @@ const throttle = new MemoryThrottle(
 
 const rateLimitEnabled = Number(process.env.ASK_RATE_LIMIT ?? 20) > 0;
 
-/** 输入长度上限：防止有人塞一篇长文把 LLM 额度一次打光 */
-const MAX_QUESTION_CHARS = Number(process.env.MAX_QUESTION_CHARS ?? 1000);
+/**
+ * 问题长度区间。**与前端规格对齐**：4 ~ 300 字。
+ *
+ * 上限刻意压到 300（原来是 1000）：一是照规格，二是防止有人塞一篇长文
+ * 把 LLM 额度一次打光。前端 `FindPage` 用同一组数字（MIN_CHARS / MAX_CHARS），
+ * 两边的校验因此不会互相打架。
+ */
+const MIN_QUESTION_CHARS = Number(process.env.MIN_QUESTION_CHARS ?? 4);
+const MAX_QUESTION_CHARS = Number(process.env.MAX_QUESTION_CHARS ?? 300);
 
 export interface AskInput {
   /** 已解析的请求体；`null` 表示 JSON 解析失败 */
@@ -64,8 +73,11 @@ export async function handleAsk(input: AskInput): Promise<HandlerResult> {
     }
   }
 
-  if (question.length < 6) {
-    return fail(400, '请把问题描述得再具体一些（至少 6 个字），包括你的处境和纠结点');
+  if (question.length < MIN_QUESTION_CHARS) {
+    return fail(
+      400,
+      `请把问题描述得再具体一些（至少 ${MIN_QUESTION_CHARS} 个字），包括你的处境和纠结点`,
+    );
   }
   if (question.length > MAX_QUESTION_CHARS) {
     return fail(400, `问题过长（${question.length} 字），请压缩到 ${MAX_QUESTION_CHARS} 字以内`);
@@ -74,10 +86,17 @@ export async function handleAsk(input: AskInput): Promise<HandlerResult> {
   const session = openSession(input.sessionToken);
 
   try {
-    const result = await runAsk(question, {
+    const core = await runAsk(question, {
       getOAuthToken: async () => session?.accessToken ?? null,
       experiment,
     });
+
+    // 展示口径在这里补齐：链路产物（AskResult）+ 6 阶段聚合 = 对外响应（AskResponse）。
+    // 刻意放在 handler 而不是步骤里 —— 调阶段划分不该需要重跑链路验证。
+    const result: AskResponse = {
+      ...core,
+      phases: toPhases(core.trace, { authenticated: Boolean(session) }),
+    };
     return ok(result);
   } catch (error) {
     console.error('[ask] 流水线失败：', error);

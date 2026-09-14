@@ -1,0 +1,44 @@
+# 依赖与构建产物：由 `pnpm install` / `pnpm run build` 还原，不进仓库
+node_modules/
+dist/
+dev-dist/
+*.tsbuildinfo
+
+# 测试与覆盖率产物
+coverage/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# 缓存
+.vite/
+
+# 本机私密覆盖：可能含密钥，绝不提交
+.env.local
+.env.*.local
+*.local
+
+# 日志
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# 编辑器与系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# ---------------------------------------------------------------------------
+# 内部工作文档：不随前端交付进共享仓库
+#
+# 这两份是我们自己的施工记录（实施计划 + 迁移签收），对后端同学没有价值，
+# 放进共享仓库只会造成噪音。保留在本机以便继续维护。
+#
+# 注意：`.env.development` 与 `.env.live` **不**在此列——它们没有密钥，
+# 是「mock 模式 / live 模式」的开关，别人 clone 后 `pnpm dev` 直接能跑。
+# ---------------------------------------------------------------------------
+FRONTEND_IMPLEMENTATION_PLAN.md
+docs/MIGRATION_CHECKLIST.md

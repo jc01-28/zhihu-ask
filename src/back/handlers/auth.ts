@@ -17,6 +17,7 @@
  *      原因见下面 REQUIRE_STATE 的注释 —— 这是规格与平台现实的冲突点。
  */
 
+import { createHash } from 'node:crypto';
 import { createRuntime } from '@/back/adapters';
 import {
   SESSION_COOKIE,
@@ -33,7 +34,8 @@ import {
   pickAuthorizationCode,
   readOAuthConfig,
 } from '@/back/adapters/zhihu-oauth';
-import type { AuthErrorCode, AuthSessionResponse } from '@/shared/contract';
+import type { MyProfile } from '@/back/framework/ports';
+import type { AuthErrorCode, AuthSessionResponse, PublicUser } from '@/shared/contract';
 import { ok, redirect, type CookieInstruction, type HandlerResult } from './types';
 
 /** 功能首页。授权成功/失败都回这里，前端读 `?auth=` 决定显示什么 */
@@ -66,50 +68,56 @@ export interface AuthSessionInput {
 }
 
 /**
+ * 把知乎公开资料转成契约要求的 `PublicUser`。
+ *
+ * ⚠️ 知乎 `/user` **没有正式 schema**，字段可能全空。全空时返回 `null`，
+ * 而不是编一个「知乎用户」的名字 —— 界面上出现一个不存在的人比空着更糟。
+ *
+ * `avatarUrl` 必须由我们这边把住 https：契约里这个字段会被**直接塞进 `<img src>`**，
+ * 放行 `http:` 或 `data:` 就是注入面（前端 schema 也会拒，但后端不该把责任推过去）。
+ */
+function toPublicUser(profile: MyProfile | null | undefined): PublicUser | null {
+  const name = profile?.name?.trim() ?? '';
+  const url = profile?.url?.trim() ?? '';
+  if (!name && !url) return null;
+
+  const avatar = profile?.avatarUrl?.trim() ?? '';
+  return {
+    // 稳定的公开标识：由主页地址（缺失时退化为昵称）派生。
+    // 刻意**不用 OAuth UID**，也不用 access token 的任何部分 —— 那属于凭据材料。
+    id: `u_${createHash('sha256').update(url || name).digest('hex').slice(0, 12)}`,
+    displayName: name || '知乎用户',
+    avatarUrl: avatar.startsWith('https://') ? avatar : null,
+  };
+}
+
+/**
  * 前端的三分支逻辑完全由这个响应决定，不要在页面上自己拼状态：
  *   configured=false                       → 「服务端未配置知乎授权」
  *   configured=true && authenticated=false → 显示授权入口
  *   authenticated=true                     → 显示功能首页
+ *
+ * ⚠️ 前端用 zod `.strict()` 校验，**恰好这三个键**。
+ * 所以「缺哪些凭证」「回调地址是否本地」这类**部署诊断信息不放在这里** ——
+ * 那是运维视角，需要查就看 `GET /api/health`。
  */
 export async function handleAuthSession(input: AuthSessionInput): Promise<HandlerResult> {
   const session = openSession(input.sessionToken);
   const report = inspectCredentials();
-  const profile = session?.profile;
 
   // 「配齐了」不能只看环境变量是否存在：回调地址是占位符或本地地址时，
-  // 点授权按钮**一定失败**。把它也算作未配置并说明原因，
-  // 前端因此可以放心地用 configured 一个布尔值决定按钮是否可点，
-  // 而不会出现「按钮能点、点下去报错」这种最招人烦的体验。
+  // 点授权按钮**一定失败**。把它也算作未配置，前端因此可以放心地用
+  // configured 一个布尔值决定按钮是否可点，而不会出现「按钮能点、点下去报错」。
   const redirectUri = report.redirectUri ?? '';
-  const redirectIsPlaceholder = Boolean(redirectUri) && isPlaceholderRedirect(redirectUri);
   const redirectUsable =
-    Boolean(redirectUri) && !report.redirectIsLocalOnly && !redirectIsPlaceholder;
-
-  const missing = [...report.missing];
-  if (redirectUri && !redirectUsable) {
-    missing.push(
-      report.redirectIsLocalOnly
-        ? 'ZHIHU_REDIRECT_URI 是本地地址，知乎无法回调 —— 需要部署到公网 HTTPS 域名'
-        : 'ZHIHU_REDIRECT_URI 还是占位符，需要换成真实域名并登记到开放平台白名单',
-    );
-  }
+    Boolean(redirectUri) &&
+    !report.redirectIsLocalOnly &&
+    !isPlaceholderRedirect(redirectUri);
 
   const body: AuthSessionResponse = {
     configured: report.ready && redirectUsable,
     authenticated: Boolean(session),
-    user: profile
-      ? {
-          name: profile.name ?? null,
-          headline: profile.headline ?? null,
-          url: profile.url ?? null,
-          avatarUrl: profile.avatarUrl ?? null,
-        }
-      : null,
-    missing,
-    redirectIsLocalOnly: report.redirectIsLocalOnly,
-    expiresInSeconds: session
-      ? Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000))
-      : 0,
+    user: toPublicUser(session?.profile),
   };
 
   return ok(body);

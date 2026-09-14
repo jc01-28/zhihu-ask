@@ -19,12 +19,13 @@ import type { SearchHit } from '@/back/framework/ports';
 import type { FieldSummary, PersonNode, TopicNode } from '@/shared/contract';
 import type { FieldSeed, FieldTopicSeed } from './fields';
 
-const CANVAS = 1000;
-const CENTER = CANVAS / 2;
+/**
+ * 布局参数。**坐标系是归一化的 0~1**（前端契约如此），不是像素也不是 0~1000。
+ * 这样前端换布局（桌面星图 → 移动端聚类卡片）完全不需要后端配合。
+ */
+const CENTER = 0.5;
 /** 议题离领域中心的距离 */
-const TOPIC_RADIUS = 300;
-/** 人物再往外一圈 */
-const PERSON_RADIUS_BASE = 110;
+const TOPIC_RADIUS = 0.28;
 /** 标题命中权重：标题最能代表主题，正文里的词可能只是顺带一提 */
 const TITLE_WEIGHT = 3;
 /** 同一个关键词在正文里最多计几次 —— 防止一个反复出现的词独占分数 */
@@ -52,11 +53,6 @@ function hash32(seed: string): number {
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
-}
-
-/** 由字符串得到 0~1 的确定性伪随机数 */
-function hashUnit(seed: string): number {
-  return (hash32(seed) % 100000) / 100000;
 }
 
 /**
@@ -204,20 +200,6 @@ function totalScore(person: PersonAggregate): number {
   return [...person.topicScores.values()].reduce((a, b) => a + b, 0);
 }
 
-/** 该人在本领域得分最高的议题 —— 决定他挂在星图的哪个方位 */
-function primaryTopicOf(person: PersonAggregate): string | null {
-  let best: string | null = null;
-  let bestScore = -1;
-  // 遍历 Map 的顺序即插入顺序，是确定的；同分时取 id 更小的那个保证稳定
-  for (const [topicId, score] of person.topicScores) {
-    if (score > bestScore || (score === bestScore && best !== null && topicId < best)) {
-      best = topicId;
-      bestScore = score;
-    }
-  }
-  return best;
-}
-
 // ── 领域摘要 ────────────────────────────────────────────────────────────
 
 export function toFieldSummary(field: FieldSeed, index: FieldIndex): FieldSummary {
@@ -236,7 +218,12 @@ export function toFieldSummary(field: FieldSeed, index: FieldIndex): FieldSummar
 
 // ── 布局 ────────────────────────────────────────────────────────────────
 
-/** 议题在半径 300 的圆上均匀分布，从正上方开始 */
+/** 收一位小数：JSON 里坐标稳定（1.2e-17 这种浮点噪声会让「两次请求是否一致」的断言变脆） */
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
+/** 议题在半径 0.28 的圆上均匀分布，从正上方开始。坐标是 0~1 归一化值 */
 export function layoutTopics(topicIds: string[]): Map<string, { x: number; y: number }> {
   const out = new Map<string, { x: number; y: number }>();
   const n = topicIds.length;
@@ -246,18 +233,19 @@ export function layoutTopics(topicIds: string[]): Map<string, { x: number; y: nu
   topicIds.forEach((topicId, i) => {
     const angle = start + (2 * Math.PI * i) / n;
     out.set(topicId, {
-      x: Math.round(CENTER + TOPIC_RADIUS * Math.cos(angle)),
-      y: Math.round(CENTER + TOPIC_RADIUS * Math.sin(angle)),
+      x: round3(CENTER + TOPIC_RADIUS * Math.cos(angle)),
+      y: round3(CENTER + TOPIC_RADIUS * Math.sin(angle)),
     });
   });
   return out;
 }
 
 /**
- * 组装星图：议题节点 + 人物节点，全部带坐标。
+ * 组装星图：议题节点 + 人物节点。
  *
- * 人物挂在**主要议题**的方位上，角度加一点由 id 决定的抖动（避免叠成一列），
- * 半径也抖动一点。抖动是确定性的，所以刷新页面位置不会变 —— 这在演示时很重要。
+ * ⚠️ **人物不带坐标**。前端契约里只有 `topics` 有 `position`，人物靠 `topicIds`
+ * 自己排布（移动端要降级成聚类卡片，本来就该由前端决定位置）。
+ * 我一度给人物也算过坐标，那会被前端的 `.strict()` 直接判为非法响应 —— 已删。
  */
 export function layoutFieldGraph(
   index: FieldIndex,
@@ -268,45 +256,33 @@ export function layoutFieldGraph(
   const activeTopics = field.topics.filter((t) => (index.topicMembers.get(t.id) ?? 0) > 0);
   const positions = layoutTopics(activeTopics.map((t) => t.id));
 
-  const topics: TopicNode[] = activeTopics.map((topic) => {
-    const pos = positions.get(topic.id)!;
-    return {
-      id: topic.id,
-      name: topic.name,
-      description: topic.description,
-      position: pos,
-      memberCount: index.topicMembers.get(topic.id) ?? 0,
-    };
-  });
+  const topics: TopicNode[] = activeTopics.map((topic) => ({
+    id: topic.id,
+    name: topic.name,
+    description: topic.description,
+    position: positions.get(topic.id)!,
+  }));
 
   const maxScore = index.people.length ? totalScore(index.people[0]) : 1;
 
-  const people: PersonNode[] = index.people.map((person) => {
-    const primary = primaryTopicOf(person);
-    const anchor = primary ? positions.get(primary) : undefined;
-
-    // 没有锚点时（不该发生，兜底）放到正上方
-    const baseAngle = anchor
-      ? Math.atan2(anchor.y - CENTER, anchor.x - CENTER)
-      : -Math.PI / 2;
-    const angle = baseAngle + (hashUnit(`${person.id}a`) - 0.5) * (Math.PI / 3);
-    const radius = TOPIC_RADIUS + PERSON_RADIUS_BASE + hashUnit(`${person.id}r`) * 90;
-
-    return {
-      id: person.id,
-      name: person.name,
-      headline: person.headline,
-      avatarUrl: person.avatarUrl,
-      initial: initialOf(person.name),
-      avatarTone: avatarToneOf(person.id),
-      topicIds: [...person.topicScores.keys()],
-      relevance: Math.max(0.15, Math.min(1, totalScore(person) / Math.max(1, maxScore))),
-      position: {
-        x: Math.round(CENTER + radius * Math.cos(angle)),
-        y: Math.round(CENTER + radius * Math.sin(angle)),
-      },
-    };
-  });
+  const people: PersonNode[] = index.people.map((person) => ({
+    id: person.id,
+    name: person.name,
+    headline: person.headline,
+    avatarUrl: person.avatarUrl,
+    initial: initialOf(person.name),
+    avatarTone: avatarToneOf(person.id),
+    topicIds: [...person.topicScores.keys()],
+    // 契约要求 0~100。最低给 10：相关度再低也是真实挂靠，不该缩成一个点
+    relevance: Math.round(Math.max(10, Math.min(100, (totalScore(person) / Math.max(1, maxScore)) * 100))),
+    /**
+     * 知乎**搜索接口不返回作者主页标识**（见 DEVELOPER.md §9 的协议偏差），
+     * 所以这里如实给 null，而不是按姓名拼一个知乎搜索链接 ——
+     * 前端契约明确写了「不接受前端拼接」，拼出来的地址点进去大概率是错的人。
+     * 接了 OAuth、能读关注列表之后，这里才有可能填上真实地址。
+     */
+    profileUrl: null,
+  }));
 
   return { topics, people };
 }

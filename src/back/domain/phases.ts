@@ -22,38 +22,45 @@ export interface TraceEntry {
   summary: string;
 }
 
-/** 阶段定义：顺序即展示顺序 */
+/** 阶段定义：顺序即展示顺序，与前端 `AGENT_STEP_ORDER` 逐字一致 */
 export const PHASE_DEFS: { id: AgentPhaseId; label: string }[] = [
-  { id: 'context', label: '读取授权上下文' },
-  { id: 'understand', label: '理解问题' },
-  { id: 'retrieve', label: '检索经历' },
-  { id: 'verify', label: '核验证据' },
-  { id: 'compose', label: '生成卡片' },
-  { id: 'persist', label: '保存结果' },
+  { id: 'loading_context', label: '读取授权上下文' },
+  { id: 'understanding', label: '理解问题' },
+  { id: 'retrieving', label: '检索经历' },
+  { id: 'verifying', label: '核验证据' },
+  { id: 'ranking', label: '重排候选' },
+  { id: 'saving', label: '保存结果' },
 ];
 
 /**
  * 8 步 → 6 阶段的归属。
  *
  * 注意 `question`（引擎的初始输入）不在表里 —— 它不是一个步骤，忽略即可。
- * 每个阶段覆盖哪些步骤，是**可以调的产品决策**；改这里不需要碰任何步骤代码。
+ * 每个阶段覆盖哪些步骤是**可以调的产品决策**；改这里不需要碰任何步骤代码。
+ *
+ * ⚠️ **一个真实链路与展示顺序的错位，流式化时必须处理**：
+ * 我们的链路实际是 `candidates → ranked → verified`，即**先重排、后校验**；
+ * 而前端要求的阶段顺序是 `verifying → ranking`，**先校验、后重排**。
+ * 现在一次性返回时无所谓（只在最后做一次汇总），但**升级成 NDJSON 流式时**，
+ * `ranking` 的 `step.completed` 必须**在 `verifying` 之后**发出，
+ * 否则前端进度条会倒退。要么调整链路顺序，要么在流式层做事件重排。
  */
 const STEP_TO_PHASE: Record<string, AgentPhaseId> = {
   // 「理解问题」= 先判该不该问人，再把处境结构化
-  triage: 'understand',
-  profile: 'understand',
+  triage: 'understanding',
+  profile: 'understanding',
 
   // 「检索经历」= 先拿到内容，再从内容里抽出「亲历事件」
-  recall: 'retrieve',
-  events: 'retrieve',
+  recall: 'retrieving',
+  events: 'retrieving',
 
-  // 「核验证据」= 聚合出人 → 重排 → 逐条回溯校验
-  candidates: 'verify',
-  ranked: 'verify',
-  verified: 'verify',
+  // 「核验证据」= 聚合出候选，并逐条回溯校验
+  candidates: 'verifying',
+  verified: 'verifying',
 
-  // 「生成卡片」= 3 张互补角色卡片 + 「别问人」路径
-  result: 'compose',
+  // 「重排候选」= 加权排序并生成最终的推荐卡片
+  ranked: 'ranking',
+  result: 'ranking',
 };
 
 /** 聚合一个阶段的整体状态：失败优先，其次跳过，再看是否真执行过 */
@@ -80,7 +87,7 @@ export function toPhases(
   const entries = trace ?? [];
 
   return PHASE_DEFS.map((def): AgentPhase => {
-    if (def.id === 'context') {
+    if (def.id === 'loading_context') {
       return {
         id: def.id,
         label: def.label,
@@ -92,7 +99,7 @@ export function toPhases(
       };
     }
 
-    if (def.id === 'persist') {
+    if (def.id === 'saving') {
       return {
         id: def.id,
         label: def.label,

@@ -89,19 +89,13 @@ export function AuthPanel({
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-[12px] leading-5 text-amber-800">
           <span className="font-medium">服务端未配置知乎授权。</span>
           <br />
-          缺少：{session.missing.join('；') || '未知'}
-          <br />
           <span className="opacity-80">
             三项凭证在知乎开放平台获取：App ID / App Key 一起发放，Access Secret 在
-            developer.zhihu.com/profile 生成。
+            developer.zhihu.com/profile 生成；回调地址必须是公网 HTTPS 域名。
+            <br />
+            具体缺什么请查 <code className="font-mono">GET /api/health</code> ——
+            部署诊断信息刻意**不放在 session 接口里**，那个接口由前端契约严格校验。
           </span>
-        </div>
-      ) : session.redirectIsLocalOnly ? (
-        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-[12px] leading-5 text-amber-800">
-          <span className="font-medium">回调地址是本地地址，知乎无法回调。</span>
-          <br />
-          需要先部署到有公网 HTTPS 域名的环境，再把该地址登记到开放平台白名单。
-          当前只能预览页面，无法完成真实登录。
         </div>
       ) : null}
 

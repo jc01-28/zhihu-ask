@@ -26,13 +26,8 @@ export function AppHeader({ session }: { session: AuthSessionResponse | null }) 
           {session?.authenticated ? (
             <>
               <span className="rounded bg-brand-soft px-2 py-0.5 text-brand">
-                {user?.name ? `已授权 · ${user.name}` : '已授权知乎账号'}
+                {user?.displayName ? `已授权 · ${user.displayName}` : '已授权知乎账号'}
               </span>
-              {user?.headline ? (
-                <span className="hidden max-w-[16rem] truncate text-ink-300 sm:inline">
-                  {user.headline}
-                </span>
-              ) : null}
               <a
                 href={authLogoutUrl}
                 className="rounded border border-black/10 px-2 py-0.5 text-ink-700 hover:border-brand hover:text-brand"

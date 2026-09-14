@@ -9,6 +9,8 @@
  * 于是「HTTP 边界」与「业务边界」在代码里是两件可见的事。
  */
 
+import { API_ERROR_CODES, type ApiErrorEnvelope } from '@/shared/contract';
+
 /**
  * 一条 cookie 指令。形状是刻意跟框架无关的 —— 不 import `next/headers`，
  * 这样在纯 node 测试里也能直接断言「登录后会下发哪个 cookie」。
@@ -36,26 +38,57 @@ export interface HandlerResult {
   cookies?: CookieInstruction[];
 }
 
-/** 走「统一信封」的成功响应 */
+/** 成功响应：**载荷本身就是响应体**，不套 `{status, data}` 外壳 */
 export function ok<T>(data: T): HandlerResult {
-  return { status: 200, body: { status: 'success', data } };
+  return { status: 200, body: data };
 }
 
-/** 走「统一信封」的错误响应 */
-export function fail(status: number, error: string, hint?: string): HandlerResult {
-  return { status, body: hint ? { error, hint } : { error } };
+/**
+ * 失败响应：前端契约规定的错误信封 `{ code, message, retryable, details? }`。
+ *
+ * ⚠️ 前端用 zod `.strict()` 校验：**只允许这四个键**。所以不要往这里塞
+ * `hint`、`trace`、`stack` 之类的诊断字段 —— 多一个键，前端会把整条响应
+ * 判为 `INVALID_RESPONSE`，连 `code` 都读不到。
+ *
+ * `code` 是 `z.string()`，因此写未在契约里登记的码是合法的（前端会走兜底分支），
+ * 但**能给语义正确的码就给** —— 那决定前端显示「重试按钮」还是「返回上一页」。
+ */
+export function fail(
+  status: number,
+  code: string,
+  message: string,
+  retryable = false,
+  details?: unknown,
+): HandlerResult {
+  const body: ApiErrorEnvelope = { code, message, retryable };
+  if (details !== undefined) body.details = details;
+  return { status, body };
 }
 
-/** 限流响应（带 Retry-After 头） */
-export function tooMany(retryAfterSec: number, hint: string): HandlerResult {
+/** 限流：前端按 `RATE_LIMITED` 展示「稍后再试」，并读 `Retry-After` 做倒计时 */
+export function tooMany(retryAfterSec: number, message: string): HandlerResult {
   return {
     status: 429,
-    body: { error: `请求过于频繁，请 ${retryAfterSec} 秒后再试`, hint },
+    body: {
+      code: API_ERROR_CODES.rateLimited,
+      message,
+      retryable: true,
+    } satisfies ApiErrorEnvelope,
     headers: { 'Retry-After': String(retryAfterSec) },
   };
 }
 
-/** 302 跳转。`location` 可以是相对路径（如 `/app?auth=success`） */
+/**
+ * 302 跳转。`location` 可以是相对路径（如 `/app?auth=success`）。
+ *
+ * 授权跳转需要 `Cache-Control: no-store` —— 否则浏览器/中间层可能缓存那次
+ * 302，用户重复进入时会直接跳回旧的授权地址而拿不到新 state。
+ */
 export function redirect(location: string, cookies?: CookieInstruction[]): HandlerResult {
-  return { status: 302, body: null, headers: { Location: location }, cookies };
+  return {
+    status: 302,
+    body: null,
+    headers: { Location: location, 'Cache-Control': 'no-store' },
+    cookies,
+  };
 }

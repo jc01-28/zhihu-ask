@@ -83,3 +83,6 @@ Thumbs.db
 *.swo
 *.tmp
 *.temp
+
+# 本地助手工具的工作目录，不属于工程源码
+.workbuddy/

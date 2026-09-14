@@ -23,7 +23,7 @@ import type {
   IdentityConfidence,
   RelevanceLevel,
 } from '@/shared/contract';
-import { avatarToneOf, httpsOrNull, initialOf } from './avatar';
+import { avatarToneOf, httpsOrNull, initialOf, personIdOf } from './avatar';
 
 /** 契约的字段长度上限。截断比被前端判非法响应好。 */
 const MAX = {
@@ -116,12 +116,20 @@ export function toCreatorCard(recommendation: Recommendation, mode: 'live' | 'fi
   const experiences = c.experiences ?? [];
   const score01 = Math.max(0, Math.min(1, c.score ?? 0));
 
+  // ⚠️ 对外 id 必须用 `personIdOf`，**不能用内部的 `c.id`**。
+  // 内部 `c.id` 是 `author:<名字>`（05-aggregate 拼的），而领域星图、`/api/creators`、
+  // 会话创建查人用的都是 `personIdOf` 的 `p_<hash>` 体系。
+  // 两者不一致时，前端拿卡片 id 去点「与 TA 聊聊」会拿到
+  // 409 CONVERSATION_SOURCE_UNAVAILABLE —— 主流程直接断掉。
+  // 作者名 → id 是纯哈希，跨领域一致，所以改这里不影响去重与跳转。
+  const id = personIdOf(c.authorName);
+
   return {
-    id: c.id,
+    id,
     name: c.authorName,
     headline: clip(c.headline ?? c.authorBadgeText ?? '', MAX.headline),
     initial: initialOf(c.authorName),
-    avatarTone: avatarToneOf(c.id),
+    avatarTone: avatarToneOf(id),
     avatarUrl: httpsOrNull(c.authorAvatar),
     profileUrl: httpsOrNull(c.profileUrl),
     identityConfidence: toIdentityConfidence(experiences),

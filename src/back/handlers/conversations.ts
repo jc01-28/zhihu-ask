@@ -24,6 +24,7 @@ import {
   type ConversationRecord,
 } from '@/back/adapters/conversation-store';
 import { openSession } from '@/back/adapters/session';
+import { loadRun } from '@/back/adapters/run-store';
 import { pageLimit } from '@/back/framework/params';
 import {
   CONSULTATION_PACKAGES,
@@ -34,7 +35,7 @@ import {
 import { getCreatorCard } from './creators';
 import { toPublicUser } from './auth';
 import { checkRate } from './rate-limit';
-import { API_ERROR_CODES, type Consultation, type Conversation, type ConversationAgentEvent, type ConversationMessage, type MessageSender, type PublicUser } from '@/shared/contract';
+import { API_ERROR_CODES, type Consultation, type Conversation, type ConversationAgentEvent, type ConversationMessage, type CreatorCard, type MessageSender, type PublicUser } from '@/shared/contract';
 import { fail, ok, tooMany, type CookieInstruction, type HandlerResult } from './types';
 
 /** 访客 cookie。**不是**登录态，只是一个稳定的匿名标识 */
@@ -187,6 +188,40 @@ export interface CreateConversationInput extends ConversationActorInput {
 }
 
 /**
+ * 会话里内嵌哪一张人物卡。
+ *
+ * ⚠️ **必须优先用 `sourceRunId` 那次检索里的卡片**。
+ * 只查注册表的话拿到的是「领域关联」版本：`evidence: []`、`role: 领域相关`、
+ * `reason` 是「在「XX」下的公开内容与这些议题相关」—— 因为它只由语料作者在哪些
+ * 议题下出现过推导，不携带逐条核验过的证据。
+ *
+ * 后果很具体：从搜索结果点「与 TA 聊聊」，那张卡明明有 3 条证据，
+ * 存进会话的却是一张空证据卡；会话 Agent 的护栏看到 `evidence` 为空就**不调模型**，
+ * 只会回「没有可引用内容」。等于「可署名、可引用、可追问」这条产品主张
+ * 在最主要的使用路径上是断的。
+ */
+async function resolveCreatorForConversation(
+  creatorId: string,
+  sourceRunId: string | null,
+): Promise<CreatorCard | null> {
+  let creator = await getCreatorCard(creatorId);
+
+  if (sourceRunId) {
+    try {
+      const run = await loadRun(sourceRunId);
+      const fromRun = run?.result?.cards?.find((card) => card.id === creatorId);
+      // 只在那张卡真的带证据时才覆盖 —— 没有证据的版本没有替换价值
+      if (fromRun && fromRun.evidence.length > 0) creator = fromRun;
+    } catch (error) {
+      // 读不到就退回注册表版本：少带证据不该让「开会话」这件主要动作失败
+      console.warn('[conversations] 读取来源运行的卡片失败，退回注册表版本：', error);
+    }
+  }
+
+  return creator;
+}
+
+/**
  * `POST /api/conversations`
  *
  * **幂等**：同一个（用户, 人物, 来源运行）永远得到同一个会话。
@@ -212,7 +247,7 @@ export async function handleCreateConversation(
     input.guestId,
   );
 
-  const creator = await getCreatorCard(creatorId);
+  const creator = await resolveCreatorForConversation(creatorId, sourceRunId);
   if (!creator) {
     // 409（不是 404）：人物存在过、但当前资料不可用 —— 重试有可能变好，
     // 所以给重试，前端保留人物结果并让聊天按钮显示可重试错误。

@@ -17,6 +17,8 @@
  * 匹配是大小写不敏感的（见 `field-graph.ts` 的归一化）。
  */
 
+import type { FieldColorToken } from '@/shared/contract';
+
 /** 议题种子（人工定义） */
 export interface FieldTopicSeed {
   id: string;
@@ -31,10 +33,14 @@ export interface FieldSeed {
   id: string;
   name: string;
   description: string;
-  /** 用 emoji，前端可直接渲染，不依赖图标库 */
+  /**
+   * 图标**名称**。前端用白名单映射到具体图标，未知名称回退默认图标。
+   * **不用 emoji、不用 URL** —— 前端契约只把它当字符串，绝不会当资源路径。
+   * 取值参考前端依赖的 lucide 图标名。
+   */
   icon: string;
-  /** 主题色，规格要求「不同专业领域可以使用不同主题色」 */
-  color: string;
+  /** 主题色 **语义 token**（见 `FIELD_COLOR_TOKENS`），不是十六进制色值 */
+  color: FieldColorToken;
   tags: string[];
   /** 领域别名。**领域搜索要能通过这些词命中**（如输入「训练大模型」要能搜到本领域） */
   aliases: string[];
@@ -56,8 +62,8 @@ export const FIELD_SEEDS: FieldSeed[] = [
     id: 'agent-dev',
     name: 'Agent 开发',
     description: '把大模型接上工具、记忆与协作机制，做成能真正干活的智能体。',
-    icon: '🤖',
-    color: '#2F6FED',
+    icon: 'bot',
+    color: 'blue',
     tags: ['LLM', 'Agent', '工程'],
     aliases: ['智能体', 'agent', 'AI Agent', '多智能体', 'agent开发'],
     searchHints: ['大模型', 'LLM', '智能体', 'prompt 工程', '工具调用'],
@@ -86,8 +92,8 @@ export const FIELD_SEEDS: FieldSeed[] = [
     id: 'ai-app',
     name: '人工智能应用',
     description: '把大模型落到具体业务里，并让它稳定上线、跑得起成本。',
-    icon: '✨',
-    color: '#7F77DD',
+    icon: 'sparkles',
+    color: 'violet',
     tags: ['大模型', '落地', '工程化'],
     aliases: ['AI 应用', '大模型应用', 'LLM 应用', '人工智能', '大模型'],
     searchHints: ['大模型', 'LLM', '模型微调', '推理部署', '知识库'],
@@ -116,8 +122,8 @@ export const FIELD_SEEDS: FieldSeed[] = [
     id: 'fintech',
     name: '金融科技',
     description: '在高约束、强监管的环境里做系统：一笔都不能错。',
-    icon: '💳',
-    color: '#D85A30',
+    icon: 'credit-card',
+    color: 'rose',
     tags: ['金融', '风控', '量化'],
     aliases: ['金融', 'fintech', '支付', '银行科技', '金融系统'],
     searchHints: ['金融', '交易系统', '风控', '量化', '支付'],
@@ -146,8 +152,8 @@ export const FIELD_SEEDS: FieldSeed[] = [
     id: 'data-model',
     name: '数据建模',
     description: '把业务共识固化成口径清晰、可复用的数据与指标体系。',
-    icon: '📊',
-    color: '#1D9E75',
+    icon: 'bar-chart',
+    color: 'emerald',
     tags: ['数据', '指标', '建模'],
     aliases: ['数据体系', '指标体系', '数仓', '数据治理', '数据仓库'],
     searchHints: ['数据', '指标', '数仓', '数据治理', '埋点'],
@@ -176,8 +182,8 @@ export const FIELD_SEEDS: FieldSeed[] = [
     id: 'product-startup',
     name: '产品与创业',
     description: '从 0 到 1 做产品，以及从一个人到一支队伍的成长。',
-    icon: '🚀',
-    color: '#EF9F27',
+    icon: 'rocket',
+    color: 'amber',
     tags: ['产品', '创业', '从0到1'],
     aliases: ['创业', '产品经理', 'startup', '产品设计', '产品'],
     searchHints: ['产品', '创业', '需求', '从0到1', '用户增长'],
@@ -206,8 +212,8 @@ export const FIELD_SEEDS: FieldSeed[] = [
     id: 'indie-dev',
     name: '独立开发',
     description: '一个人做完产品、运营和收款，并且真的赚到钱。',
-    icon: '🧩',
-    color: '#639922',
+    icon: 'puzzle',
+    color: 'teal',
     tags: ['独立开发', '副业', '变现'],
     aliases: ['独立开发者', '副业', 'solo', 'indie', '个人开发'],
     searchHints: ['独立开发', '副业', '变现', '小程序', '个人开发者'],
@@ -236,8 +242,8 @@ export const FIELD_SEEDS: FieldSeed[] = [
     id: 'research-eng',
     name: '科研与工程实践',
     description: '把论文变成能跑的系统，把实验变成可复现的结论。',
-    icon: '🔬',
-    color: '#A855F7',
+    icon: 'flask-conical',
+    color: 'indigo',
     tags: ['科研', '工程', '机器学习'],
     aliases: ['科研', '论文', '机器学习工程', '算法工程', 'machine learning'],
     searchHints: ['机器学习', '大模型', '模型训练', '论文', '算法', '复现'],

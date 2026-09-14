@@ -1,15 +1,16 @@
 /**
  * 前端 · API 客户端
  *
- * 前端**唯一**允许发 HTTP 请求的地方。端点路径与响应类型全部来自 `@/shared/contract`，
- * 所以后端改字段时只需要动「契约文件 + 这里」两处，页面组件不用动。
+ * 前端**唯一**允许发 HTTP 请求的地方。端点路径与响应类型全部来自 `@/shared/contract`。
+ *
+ * ⚠️ **这个文件即将被废弃**：正式前端是队友那套独立 SPA
+ * （`origin/front` 分支的 `src/frontend/`），本仓库的 Next.js 侧退为**纯 API**。
+ * 保留它只是为了在页面移除之前让仓库仍能编译，不要在此基础上继续开发。
  *
  * 它替页面处理掉三件琐事：
- *   1. 统一信封解析（`{status:'success',data}` / `{error}`）—— 页面不用自己判 HTTP 状态码
- *   2. 统一把错误转成 `Error` —— 页面只需要 try/catch
+ *   1. 响应解析（成功 = 载荷本身；失败 = `{code,message,retryable}`）
+ *   2. 统一把错误转成 `Error`（并把 code/retryable 挂上去）—— 页面只需要 try/catch
  *   3. 端点常量集中 —— 不会出现散落各处的硬编码路径
- *
- * 后端还没就绪时，前端可以只依赖 `@/shared/contract` 的类型 + 一份样例响应先开发。
  */
 
 import {
@@ -19,16 +20,19 @@ import {
   type AskResponse,
   type AuthSessionResponse,
   type FieldGraphResponse,
-  type FieldSearchResponse,
+  type FieldListResponse,
   type FieldSummary,
   type HealthResponse,
 } from '@/shared/contract';
 
 /**
- * 统一的请求 + 信封拆包。所有导出函数都走这里，保证错误语义一致。
+ * 统一的请求。所有导出函数都走这里，保证错误语义一致。
  *
- * 信封形状见 `@/shared/contract` 的 `ApiEnvelope`。这里从 `unknown` 手动收窄而不是直接断言成
- * 联合类型：响应来自网络，运行时什么都可能是，逐字段判类型比信任断言更稳。
+ * 响应形状由**前端契约**决定：
+ *   · 成功 → **响应体就是载荷本身**，没有 `{status:'success', data}` 外壳
+ *   · 失败 → `{ code, message, retryable, details? }`
+ *
+ * 这里从 `unknown` 手动收窄而不是断言：响应来自网络，运行时什么都可能是。
  */
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -43,13 +47,18 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error(`响应不是合法 JSON（HTTP ${res.status}）`);
   }
 
-  const env = payload as { status?: unknown; data?: unknown; error?: unknown } | null;
-  if (!res.ok || !env || env.status !== 'success') {
-    throw new Error(
-      typeof env?.error === 'string' ? env.error : `请求失败 HTTP ${res.status}`,
-    );
+  if (!res.ok) {
+    const err = payload as { code?: unknown; message?: unknown; retryable?: unknown } | null;
+    const failure = new Error(
+      typeof err?.message === 'string' ? err.message : `请求失败 HTTP ${res.status}`,
+    ) as Error & { code?: string; retryable?: boolean };
+    // code 决定界面显示「重试」还是「返回上一页」，别丢
+    if (typeof err?.code === 'string') failure.code = err.code;
+    if (typeof err?.retryable === 'boolean') failure.retryable = err.retryable;
+    throw failure;
   }
-  return env.data as T;
+
+  return payload as T;
 }
 
 /**
@@ -98,19 +107,24 @@ export function imageProxyUrl(raw: string): string {
  * `memberCount` / `topicCount` 是后端从真实语料算出来的，会随语料变化；
  * 演示前打 `/api/health` 可以看到当前跑的是哪份语料。
  */
-export function fetchFeaturedFields(): Promise<FieldSummary[]> {
-  return request<FieldSummary[]>(API_ROUTES.fieldsFeatured, { cache: 'no-store' });
+/**
+ * 推荐领域。返回顺序是产品定的展示顺序，**不要在前端重排**。
+ *
+ * ⚠️ 返回的是 `{ items }` 而不是数组 —— 契约如此。
+ */
+export function fetchFeaturedFields(): Promise<FieldListResponse> {
+  return request<FieldListResponse>(API_ROUTES.fieldsFeatured, { cache: 'no-store' });
 }
 
 /**
  * 领域搜索。
  *
- * ⚠️ 两件事：① 返回的是 `{ fields, total }` 不是数组（`total` 可能大于 `fields.length`）；
- * ② **只搜领域，不返回人物** —— 想找人请用 `ask()`，那是另一条路径。
+ * ⚠️ 两件事：① 返回 `{ items }`；② **只搜领域，不返回人物** ——
+ * 想找人请用 `ask()`，那是另一条路径。
  */
-export function searchFields(query: string, limit = 12): Promise<FieldSearchResponse> {
+export function searchFields(query: string, limit = 12): Promise<FieldListResponse> {
   const qs = new URLSearchParams({ query, limit: String(limit) });
-  return request<FieldSearchResponse>(`${API_ROUTES.fields}?${qs}`, { cache: 'no-store' });
+  return request<FieldListResponse>(`${API_ROUTES.fields}?${qs}`, { cache: 'no-store' });
 }
 
 /** 领域星图。节点的 `position` 后端已经算好，前端等比缩放到容器即可 */

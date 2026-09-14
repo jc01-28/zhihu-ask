@@ -19,7 +19,11 @@ import {
 } from '@/back/domain/field-graph';
 import { FIELD_SEEDS, findFieldSeed } from '@/back/domain/fields';
 import type { SearchHit } from '@/back/framework/ports';
-import type { FieldGraphResponse, FieldSearchResponse } from '@/shared/contract';
+import {
+  API_ERROR_CODES,
+  type FieldGraphResponse,
+  type FieldListResponse,
+} from '@/shared/contract';
 import { fail, ok, type HandlerResult } from './types';
 
 /**
@@ -115,11 +119,19 @@ async function loadIndexes(): Promise<FieldIndex[]> {
  * 推荐领域列表。
  *
  * **按种子定义顺序返回**，不按人数排序 —— 展示顺序是产品决定（规格里列了固定 7 个），
- * 而 `memberCount` 只是附带信息。排序会把它变成一个不可控的东西。
+ * 而 `memberCount` 只是附带信息。
+ *
+ * 只推**有人挂靠**的领域：空领域点进去是一张空星图，而前端契约要求
+ * `topics` 与 `people` 各至少 1 个 —— 与其让用户撞一个错误页，不如不进推荐列表。
  */
 export async function handleFeaturedFields(): Promise<HandlerResult> {
   const indexes = await loadIndexes();
-  return ok(indexes.map((index) => toFieldSummary(index.field, index)));
+  const body: FieldListResponse = {
+    items: indexes
+      .filter((index) => index.people.length > 0 && index.topicMembers.size > 0)
+      .map((index) => toFieldSummary(index.field, index)),
+  };
+  return ok(body);
 }
 
 // ── 领域搜索 ────────────────────────────────────────────────────────────
@@ -134,8 +146,10 @@ export async function handleSearchFields(input: FieldSearchInput): Promise<Handl
   if (!query) {
     return fail(
       400,
+      API_ERROR_CODES.invalidSearchRequest,
       '缺少查询词 query',
-      '用法：/api/fields?query=训练大模型&limit=12。注意**这里只搜领域，不搜人物**',
+      false,
+      { hint: '用法：/api/fields?query=训练大模型&limit=12。这里只搜领域，不搜人物' },
     );
   }
 
@@ -147,7 +161,9 @@ export async function handleSearchFields(input: FieldSearchInput): Promise<Handl
   const rawLimit = Number(input.limit);
   const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(Math.trunc(rawLimit), 50)) : 12;
 
-  const body: FieldSearchResponse = { fields: all.slice(0, limit), total: all.length };
+  // 空结果**不是错误**：返回 { items: [] }，由前端展示「没有匹配的领域」。
+  // 契约里没有 total —— 前端只认 items，多给一个键反而会让整条响应判为非法。
+  const body: FieldListResponse = { items: all.slice(0, limit) };
   return ok(body);
 }
 
@@ -158,8 +174,10 @@ export async function handleFieldGraph(fieldId: string): Promise<HandlerResult> 
   if (!seed) {
     return fail(
       404,
+      API_ERROR_CODES.fieldNotFound,
       `没有这个领域：${fieldId}`,
-      `可用领域：${FIELD_SEEDS.map((f) => f.id).join(' / ')}`,
+      false,
+      { availableFields: FIELD_SEEDS.map((f) => f.id) },
     );
   }
 
@@ -167,10 +185,26 @@ export async function handleFieldGraph(fieldId: string): Promise<HandlerResult> 
   const index = indexes.find((i) => i.field.id === fieldId);
   if (!index) {
     // 理论上不会发生（索引是按 FIELD_SEEDS 建的），兜底避免 500
-    return fail(500, `领域索引里缺少 ${fieldId}，请检查 FIELD_SEEDS 与索引构建是否一致`);
+    return fail(
+      500,
+      API_ERROR_CODES.fieldSearchFailed,
+      `领域索引里缺少 ${fieldId}，请检查 FIELD_SEEDS 与索引构建是否一致`,
+    );
   }
 
   const { topics, people } = layoutFieldGraph(index);
+
+  // 前端契约要求 topics 与 people 各至少 1 个 —— 与其返回一个空数组让前端解析失败，
+  // 不如明确地说「这个领域还没上线」。对用户来说这也是更诚实的结果。
+  if (!topics.length || !people.length) {
+    return fail(
+      404,
+      API_ERROR_CODES.fieldNotFound,
+      `领域「${seed.name}」暂未上线：还没有人物挂靠到它的议题上`,
+      false,
+    );
+  }
+
   const body: FieldGraphResponse = {
     field: toFieldSummary(seed, index),
     topics,

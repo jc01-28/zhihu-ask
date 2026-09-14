@@ -170,14 +170,9 @@ async function main() {
     section('基础可用性');
     const health = await getJson('/api/health');
     check('/api/health 返回 200', health.status === 200, `实际 ${health.status}`);
-    // ⚠️ 所有端点统一走信封 { status:'success', data }（见 src/shared/contract.ts）。
-    // 这里刻意按契约显式拆包：如果哪天有人漏了信封，用例要红，而不是悄悄读 undefined。
-    const healthData = health.body?.data;
-    check(
-      '响应符合统一信封（status=success 且带 data）',
-      health.body?.status === 'success' && Boolean(healthData),
-      `body.status=${health.body?.status}`,
-    );
+    // ⚠️ 响应形状由**前端契约**决定：成功时**响应体就是载荷本身**，没有 {status,data} 外壳。
+    // （曾经套过一层信封，前端 zod 的 .strict() 直接判整条响应非法 —— 已改回扁平。）
+    const healthData = health.body;
     check('health.ok 为 true', healthData?.ok === true);
     check(
       '数据目录可写（serverless 环境会回退到 /tmp）',
@@ -198,27 +193,30 @@ async function main() {
       );
     }
 
-    section('登录状态（授权域新口径）');
+    section('登录状态（对齐前端契约）');
     const status = await getJson('/api/auth/session');
     check('/api/auth/session 返回 200', status.status === 200);
-    const statusData = status.body?.data;
-    // 前端三分支全靠这两个平级布尔，所以它们必须存在且是 boolean
+    const s = status.body;
     check(
-      'configured 是布尔（凭证是否配齐）',
-      typeof statusData?.configured === 'boolean',
-      `configured=${statusData?.configured}`,
+      'configured / authenticated 都是布尔',
+      typeof s?.configured === 'boolean' && typeof s?.authenticated === 'boolean',
+      `configured=${s?.configured} authenticated=${s?.authenticated}`,
+    );
+    // 前端 schema 是 .strict() —— **多一个键整条响应就作废**。
+    // 这条断言就是那个守门人：曾经这里多出 missing/redirectIsLocalOnly/expiresInSeconds 三个键，
+    // 前端会全部判为 INVALID_RESPONSE，而后端日志里一点异常都看不到。
+    check(
+      '恰好只有 3 个键（configured / authenticated / user）',
+      JSON.stringify(Object.keys(s ?? {}).sort()) ===
+        JSON.stringify(['authenticated', 'configured', 'user']),
+      `实际键：${Object.keys(s ?? {}).join(', ') || '(空)'}`,
     );
     check(
-      'authenticated 是布尔（是否已授权）',
-      typeof statusData?.authenticated === 'boolean',
-      `authenticated=${statusData?.authenticated}`,
+      'user 是对象或 null',
+      s?.user === null || typeof s?.user === 'object',
+      `user=${JSON.stringify(s?.user)}`,
     );
-    check(
-      'missing 是数组（缺哪些凭证直接可读）',
-      Array.isArray(statusData?.missing),
-      `missing=${JSON.stringify(statusData?.missing)}`,
-    );
-    check('未授权时 authenticated 为 false', statusData?.authenticated === false);
+    check('未授权时 authenticated 为 false', s?.authenticated === false);
 
     section('授权入口的防御');
     // 凭证没配齐 / 回调地址是占位符时，不该 500 裸奔，而应 302 回 /app 带错误码
@@ -257,13 +255,34 @@ async function main() {
       `HTTP ${legacy.status}`,
     );
 
-    section('领域域（专业领域社交）');
+    section('领域域（对齐前端 zod .strict() 契约）');
+
+    // 前端的 schema 全部 .strict()：多一个键、少一个键、值域越界，整条响应都会被判非法。
+    // 所以这里不止断言语义，还要断言**键集合精确匹配** —— 那才是真正会拦住人的那一层。
+    const keysOf = (o) => JSON.stringify(Object.keys(o ?? {}).sort());
+
     const featured = await getJson('/api/fields/featured');
-    const featuredFields = featured.body?.data ?? [];
+    const featuredFields = featured.body?.items ?? [];
+    check('响应形状是 { items }（恰好一个键）', keysOf(featured.body) === '["items"]', keysOf(featured.body));
     check(
-      '推荐领域返回 7 个，且顺序是定义顺序',
-      featuredFields.length === 7 && featuredFields[0]?.id === 'agent-dev',
+      '推荐领域非空且首尾顺序是定义顺序',
+      featuredFields.length > 0 && featuredFields[0]?.id === 'agent-dev',
       featuredFields.map((f) => f.name).join(' / '),
+    );
+    check(
+      'FieldSummary 恰好 8 个键',
+      featuredFields.every(
+        (f) =>
+          keysOf(f) ===
+          '["color","description","icon","id","memberCount","name","tags","topicCount"]',
+      ),
+      keysOf(featuredFields[0]),
+    );
+    const FIELD_COLORS = ['blue','cyan','violet','amber','emerald','rose','indigo','teal'];
+    check(
+      'color 是白名单 token（不是十六进制或任意字符串）',
+      featuredFields.every((f) => FIELD_COLORS.includes(f.color)),
+      featuredFields.map((f) => `${f.name}=${f.color}`).join(' ｜ '),
     );
     check(
       '每个领域都挂到了真实人物（不是空壳）',
@@ -273,46 +292,80 @@ async function main() {
 
     const fieldSearch = await getJson(`/api/fields?query=${encodeURIComponent('训练大模型')}`);
     check(
-      '领域搜索命中相关领域',
-      (fieldSearch.body?.data?.total ?? 0) > 0,
-      (fieldSearch.body?.data?.fields ?? []).map((f) => f.name).join(' / '),
+      '领域搜索命中相关领域，形状也是 { items }',
+      (fieldSearch.body?.items ?? []).length > 0 && keysOf(fieldSearch.body) === '["items"]',
+      (fieldSearch.body?.items ?? []).map((f) => f.name).join(' / '),
     );
     check(
       '领域搜索只返回领域、不返回人物（两个功能的边界）',
-      !JSON.stringify(fieldSearch.body?.data ?? {}).includes('"people"'),
+      !JSON.stringify(fieldSearch.body ?? {}).includes('"people"'),
     );
-    // 回归断言：曾经因为给每个领域无条件叠加「人数加权」，
-    // 任何查询都返回全部 7 个领域 —— 连不存在的词也一样。
+    // 回归断言：曾因给每个领域无条件叠加「人数加权」，任何查询都返回全部领域 —— 连不存在的词也一样。
     check(
-      '无意义查询返回 0 个领域',
-      (await getJson(`/api/fields?query=${encodeURIComponent('不存在的领域xyz')}`)).body?.data
-        ?.total === 0,
+      '无意义查询返回空 items（不是错误，也不是全部领域）',
+      ((await getJson(`/api/fields?query=${encodeURIComponent('不存在的领域xyz')}`)).body?.items ?? [])
+        .length === 0,
     );
     check('领域搜索缺 query 返回 400', (await getJson('/api/fields')).status === 400);
+    const badReq = await getJson('/api/fields');
+    check(
+      '错误体是 { code, message, retryable } 形状',
+      typeof badReq.body?.code === 'string' &&
+        typeof badReq.body?.message === 'string' &&
+        typeof badReq.body?.retryable === 'boolean',
+      JSON.stringify(badReq.body),
+    );
 
     const graph = await getJson('/api/fields/agent-dev/graph');
-    const graphData = graph.body?.data;
-    const nodes = [...(graphData?.topics ?? []), ...(graphData?.people ?? [])];
+    const g = graph.body;
+    const topics = g?.topics ?? [];
+    const people = g?.people ?? [];
     check(
-      '星图同时返回议题与人物，且坐标都在 0~1000 画布内',
-      (graphData?.topics?.length ?? 0) > 0 &&
-        (graphData?.people?.length ?? 0) > 0 &&
-        nodes.every(
-          (n) =>
-            n.position?.x >= 0 &&
-            n.position?.x <= 1000 &&
-            n.position?.y >= 0 &&
-            n.position?.y <= 1000,
-        ),
-      `${graphData?.topics?.length} 议题 / ${graphData?.people?.length} 人`,
+      '星图返回 field + topics + people（恰好三个键）',
+      keysOf(g) === '["field","people","topics"]',
+      keysOf(g),
+    );
+    check('议题与人物都非空（前端契约要求各至少 1 个）', topics.length > 0 && people.length > 0, `${topics.length} 议题 / ${people.length} 人`);
+    check(
+      'TopicNode 恰好 4 个键（不该有 memberCount 之类的多余字段）',
+      topics.every((t) => keysOf(t) === '["description","id","name","position"]'),
+      keysOf(topics[0]),
     );
     check(
-      '人物头像三要素齐全（initial / avatarTone / relevance）',
-      (graphData?.people ?? []).every(
-        (p) => p.initial && p.avatarTone && typeof p.relevance === 'number',
+      '议题坐标是 **0~1 归一化**（不是 0~1000）',
+      topics.every((t) => t.position.x >= 0 && t.position.x <= 1 && t.position.y >= 0 && t.position.y <= 1),
+      topics.map((t) => `(${t.position.x},${t.position.y})`).join(' '),
+    );
+    check(
+      'PersonNode 恰好 9 个键，且**不含 position**（人物位置由前端决定）',
+      people.every(
+        (p) =>
+          keysOf(p) ===
+          '["avatarTone","avatarUrl","headline","id","initial","name","profileUrl","relevance","topicIds"]',
       ),
+      keysOf(people[0]),
     );
-    check('未知领域返回 404', (await getJson('/api/fields/no-such-field/graph')).status === 404);
+    check(
+      'relevance 是 0~100（不是 0~1）',
+      people.every((p) => p.relevance >= 0 && p.relevance <= 100),
+      people.slice(0, 4).map((p) => p.relevance).join(' / '),
+    );
+    check(
+      'profileUrl 字段存在且为 null（知乎搜索接口不返回作者主页标识）',
+      people.every((p) => p.profileUrl === null || typeof p.profileUrl === 'string'),
+    );
+    check(
+      '人物的 topicIds 都指向本领域真实存在的议题',
+      people.every((p) => p.topicIds.every((id) => topics.some((t) => t.id === id))),
+    );
+    const notFound = await getJson('/api/fields/no-such-field/graph');
+    check(
+      '未知领域返回 404 + FIELD_NOT_FOUND + retryable:false（前端据此不给重试按钮）',
+      notFound.status === 404 &&
+        notFound.body?.code === 'FIELD_NOT_FOUND' &&
+        notFound.body?.retryable === false,
+      JSON.stringify(notFound.body),
+    );
 
     section('核心链路：情境化问题应走「真人」');
     const askStart = Date.now();
@@ -329,7 +382,7 @@ async function main() {
         ? '⚠️ 已超过 60s：生产环境会 504。缓解手段：部署环境 maxDuration=300，或降低 LLM_CONCURRENCY 之外的调用次数'
         : `LLM 并发 ${process.env.LLM_CONCURRENCY || 4}`,
     );
-    const result = human.body?.data;
+    const result = human.body;
 
     if (result) {
       check('分诊路由为 human', result.route === 'human', `route=${result.route}`);
@@ -458,17 +511,17 @@ async function main() {
     check('返回 200', generic.status === 200, generic.body?.error ?? `HTTP ${generic.status}`);
     check(
       '路由不是 human',
-      generic.body?.data?.route === 'content' || generic.body?.data?.route === 'ai',
-      `route=${generic.body?.data?.route} · ${generic.body?.data?.triageReason ?? ''}`,
+      generic.body?.route === 'content' || generic.body?.route === 'ai',
+      `route=${generic.body?.route} · ${generic.body?.triageReason ?? ''}`,
     );
     check(
       '不给真人卡片',
-      generic.body?.data?.recommendations?.length === 0,
+      generic.body?.recommendations?.length === 0,
     );
     check(
       '改为直接给公开内容',
-      generic.body?.data?.contentOnly?.length > 0,
-      `${generic.body?.data?.contentOnly?.length ?? 0} 条内容`,
+      generic.body?.contentOnly?.length > 0,
+      `${generic.body?.contentOnly?.length ?? 0} 条内容`,
     );
 
     if (WITH_THROTTLE) {

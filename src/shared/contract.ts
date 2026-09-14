@@ -172,11 +172,19 @@ export interface AskResponse extends AskResult {
 export interface FieldSummary {
   id: string;
   name: string;
+  /** 最多 240 字 */
   description: string;
-  /** 图标：用 emoji 或短字符，前端自行决定怎么渲染 */
+  /**
+   * 图标**名称**（≤40 字）。前端用白名单映射到具体图标，未知名称回退默认图标。
+   * **不是** emoji、更不是 URL —— 避免任何字符串被当成资源路径或 HTML 用。
+   */
   icon: string | null;
-  /** 主题色（十六进制）。规格要求「不同专业领域可以使用不同主题色」 */
-  color: string;
+  /**
+   * ⚠️ 只发**语义 token**，不发十六进制色值（见 `FIELD_COLOR_TOKENS`）。
+   * 具体色值由前端的固定映射表决定。
+   */
+  color: FieldColorToken;
+  /** 最多 6 个标签，每个最多 20 字 */
   tags: string[];
   memberCount: number;
   topicCount: number;
@@ -187,33 +195,36 @@ export interface TopicNode {
   name: string;
   description: string;
   /**
-   * 画布坐标。**坐标系约定：0~1000 的正方形，中心 (500,500) 是领域中心节点。**
-   * 前端按容器尺寸等比缩放即可，不需要自己算布局。
+   * ⚠️ **取值固定在 0~1**，不是 0~1000。
+   * 坐标系归一化之后，前端换布局（桌面星图 → 移动端聚类卡片）不需要后端配合。
    */
   position: { x: number; y: number };
-  memberCount: number;
 }
 
+/**
+ * 星图里的人物节点。
+ *
+ * 只含「公开可见 + 与领域相关」的最小字段集：**不带证据、不带分数理由**。
+ * 前端的 `.strict()` 要求恰好这 9 个字段 —— 多一个少一个都会被判为非法响应
+ * （我一度给它加过 `position`，那会直接导致整条响应解析失败）。
+ */
 export interface PersonNode {
   id: string;
   name: string;
   headline: string;
   avatarUrl: string | null;
-  /** 头像占位字：取名字首字（中文）或首字母（英文） */
+  /** 头像占位字：中文取首字，英文取首字母。最多 2 字 */
   initial: string;
   /** 头像底色。由 id 哈希决定 —— 同一个人在任何页面颜色都一样 */
   avatarTone: string;
   topicIds: string[];
-  /** 与该领域的相关度 0~1，规格里用它决定头像大小 */
+  /** 与该领域的相关度，**0~100**（不是 0~1） */
   relevance: number;
   /**
-   * 画布坐标（与 TopicNode 同一坐标系）。
-   *
-   * ⚠️ 规格给的 PersonNode 里**没有**这个字段，这里是**超集**：
-   * 位置由后端确定性算好，前端可以直接画；想自己按 topicIds 环绕排布也完全可以。
-   * 之所以还是给出来 —— 「确定性布局」放在后端，前端就不用为移动端降级再实现一套。
+   * 公开知乎主页地址。**必须由后端给出，前端不按姓名拼接。**
+   * 允许 null：知乎搜索接口不返回作者主页标识，领域来源的人物可能没有地址。
    */
-  position: { x: number; y: number };
+  profileUrl: string | null;
 }
 
 export interface FieldGraphResponse {
@@ -222,12 +233,35 @@ export interface FieldGraphResponse {
   people: PersonNode[];
 }
 
-export interface FieldSearchResponse {
-  /** 命中的领域。**领域搜索只返回领域，永远不直接返回人物** —— 这是两个功能的边界 */
-  fields: FieldSummary[];
-  /** 命中总数（可能大于 fields.length，因为 limit 会截断） */
-  total: number;
+/**
+ * 领域检索的响应。
+ *
+ * ⚠️ 字段名是 `items`，而且**没有 `total`** —— 前端 `.strict()` 只认 `items`。
+ * 空结果不是错误：返回 `{ items: [] }`，由前端展示「没有匹配的领域」。
+ * **领域检索永远不会退化成人物检索**：返回值一定是领域，这是两个功能的边界。
+ */
+export interface FieldListResponse {
+  items: FieldSummary[];
 }
+
+/**
+ * 领域主题色**白名单**。与前端 `FIELD_COLOR_TOKENS` 逐字对齐。
+ *
+ * ⚠️ 只发语义 token。这样即使某天有字符串被注入了 `color: "red; background: url(...)"`，
+ * 它也不可能落进样式 —— 前端的 enum 校验会直接拒绝，而不是交给 CSS 去猜。
+ */
+export const FIELD_COLOR_TOKENS = [
+  'blue',
+  'cyan',
+  'violet',
+  'amber',
+  'emerald',
+  'rose',
+  'indigo',
+  'teal',
+] as const;
+
+export type FieldColorToken = (typeof FIELD_COLOR_TOKENS)[number];
 
 
 
@@ -267,37 +301,22 @@ export const fieldGraphPath = (fieldId: string): string =>
   `${API_ROUTES.fields}/${encodeURIComponent(fieldId)}/graph`;
 
 /**
- * 授权错误码。
- *
- * 为什么要枚举而不是直接给文案：前端要按不同错误显示不同引导
- * （没配置 → 告诉运维；state 对不上 → 提示重试；换 token 失败 → 提示稍后再试）。
- * 让前端猜文案就等于把后端语义复制一份到前端，迟早不一致。
+ * 公开用户视图。
+ * **不是** OAuth UID，也不是数据库主键 —— 前端只需要一个稳定的展示身份。
  */
-export type AuthErrorCode =
-  /** 服务端 OAuth 凭证没配齐 —— 前端显示「服务端未配置知乎授权」 */
-  | 'unconfigured'
-  /** 需要授权才能访问 —— 引导用户点授权按钮 */
-  | 'required'
-  /** 回调里没有授权码 */
-  | 'code_missing'
-  /** 回调没带 state（知乎不保证回传，见 DEVELOPER.md §9） */
-  | 'state_missing'
-  /** state 与 cookie 对不上，疑似 CSRF */
-  | 'state_mismatch'
-  /** 返回的 token 类型不是我们支持的那种 */
-  | 'token_type_unsupported'
-  /** 用 code 换 token 失败（凭证错 / code 过期 / 网络） */
-  | 'exchange_failed';
-
-export interface AuthUser {
-  name: string | null;
-  headline: string | null;
-  url: string | null;
+export interface PublicUser {
+  id: string;
+  displayName: string;
+  /** 必须是 https 绝对地址，或 null。前端会直接塞进 <img src> */
   avatarUrl: string | null;
 }
 
 /**
  * `GET /api/auth/session` 的响应。
+ *
+ * ⚠️ 前端用 zod `.strict()` 校验：**恰好这三个键**，多一个就整条判无效。
+ * 所以「缺哪些凭证」「回调地址是否本地」这类**部署诊断信息不能放这里** ——
+ * 它们属于运维视角，不是前端契约的一部分。需要查就去看 `GET /api/health`。
  *
  * 前端的三分支逻辑完全由它决定（不要在页面上拼状态）：
  *   configured=false                       → 显示「服务端未配置知乎授权」
@@ -305,19 +324,36 @@ export interface AuthUser {
  *   authenticated=true                     → 显示功能首页
  */
 export interface AuthSessionResponse {
-  /** 服务端 OAuth 凭证是否齐备（三项：App ID / App Key / 回调地址） */
+  /** 服务端 OAuth 凭证是否齐备（含回调地址可用性） */
   configured: boolean;
   /** 用户是否已完成知乎授权 */
   authenticated: boolean;
-  /** 公开用户信息。知乎 /user 没有正式 schema，字段可能全为空 */
-  user: AuthUser | null;
-  /** configured=false 时缺哪些凭证，直接显示给开发者看 */
-  missing: string[];
-  /** 回调地址是否本地地址 —— 是的话知乎永远回调不了，只能预览页面 */
-  redirectIsLocalOnly: boolean;
-  /** 会话剩余有效秒数 */
-  expiresInSeconds: number;
+  user: PublicUser | null;
 }
+
+/**
+ * 知乎授权回调可能带回的状态，用于**一次性**提示。
+ * 与前端 `AUTH_QUERY_STATUSES` 逐字对齐。
+ */
+export const AUTH_QUERY_STATUSES = [
+  'success',
+  'unconfigured',
+  'required',
+  'code_missing',
+  'state_missing',
+  'state_mismatch',
+  'token_type_unsupported',
+  'exchange_failed',
+] as const;
+
+export type AuthQueryStatus = (typeof AUTH_QUERY_STATUSES)[number];
+
+/** 授权错误码的旧别名，保留给后端日志使用 */
+export type AuthErrorCode = AuthQueryStatus;
+
+/** 登录与退出一律使用**浏览器导航**，不通过 fetch 追踪 302 */
+export const AUTH_LOGIN_PATH = '/api/auth/zhihu/login';
+export const AUTH_LOGOUT_PATH = '/api/auth/zhihu/logout';
 
 /** ── 六阶段进度 ────────────────────────────────────────────────────────── */
 
@@ -329,13 +365,22 @@ export interface AuthSessionResponse {
  *   - `AskResult.phases` 是给界面看的 6 阶段聚合
  * 映射关系见 `back/domain/phases.ts`。改展示口径不需要碰核心链路。
  */
+/**
+ * 六阶段标识。**与前端 `agentStepSchema` 逐字对齐**（含顺序）：
+ *
+ *   loading_context → understanding → retrieving → verifying → ranking → saving
+ *
+ * ⚠️ 注意第 5 个是 `ranking`（重排），不是「生成卡片」。
+ * 后端一度叫 `compose`，语义和第 5 个的预期不一致 —— 前端按 `ranking` 显示
+ * 「正在重排候选」，后端却还在生成卡片，进度就会骗人。
+ */
 export type AgentPhaseId =
-  | 'context'
-  | 'understand'
-  | 'retrieve'
-  | 'verify'
-  | 'compose'
-  | 'persist';
+  | 'loading_context'
+  | 'understanding'
+  | 'retrieving'
+  | 'verifying'
+  | 'ranking'
+  | 'saving';
 
 export interface AgentPhase {
   id: AgentPhaseId;
@@ -347,20 +392,51 @@ export interface AgentPhase {
 
 
 /**
- * 统一响应信封。**所有 `/api/*` 端点**都返回这个形状（含 `/api/health`）：
- *   成功 → `{ status: 'success', data: T }`
- *   失败 → `{ error: string, hint?: string }`
+ * 前后端共同的错误信封。
  *
- * 前端因此只需要判断一个字段就能区分成功/失败，完全不必了解内部细节。
- * 后端统一由 `back/handlers/types.ts` 的 `ok()` / `fail()` 构造，不要手拼。
+ * ⚠️ **这个形状由前端契约决定，不是我们自选的。**
+ * 前端在 `src/shared/contracts/errors.ts` 里用 zod `.strict()` 校验它 ——
+ * **只允许这四个键**，多一个字段整条响应就会被判为 `INVALID_RESPONSE`。
  *
- * ⚠️ 这条规则是**刚确立**的：此前 /api/health 与 /api/oauth/status 返回的是裸对象，
- * 导致同一个前端要维护两套解析逻辑。改成统一信封后，`scripts/e2e.mjs`
- * 里那些「漏信封就报红」的断言就是这条契约的守门人。
+ * 历史教训：后端一度返回 `{ error, hint }`，前端那边直接全部解析失败。
+ * 契约的消费方是前端，形状以它为准。
  */
-export type ApiEnvelope<T> =
-  | { status: 'success'; data: T }
-  | { error: string; hint?: string };
+export interface ApiErrorEnvelope {
+  code: string;
+  message: string;
+  /** 前端的重试按钮要不要出现，完全看这个布尔 */
+  retryable: boolean;
+  /**
+   * 可选业务上下文，只给需要「回正」的接口用。
+   * 目前唯一用途是 `INVALID_CONSULTATION_TRANSITION`：把当前完整的 Consultation
+   * 放进来，前端据此把面板改回服务端真实状态，而不是自己推导下一状态。
+   */
+  details?: unknown;
+}
+
+/**
+ * 前端需要区分处理的公开错误码。
+ * 与前端 `API_ERROR_CODES` 逐字对齐 —— 改这里必须同步改那边。
+ */
+export const API_ERROR_CODES = {
+  invalidSearchRequest: 'INVALID_SEARCH_REQUEST',
+  invalidMessage: 'INVALID_MESSAGE',
+  authRequired: 'ZHIHU_AUTH_REQUIRED',
+  authExpired: 'ZHIHU_AUTH_EXPIRED',
+  demoRoleForbidden: 'DEMO_ROLE_FORBIDDEN',
+  runNotFound: 'RUN_NOT_FOUND',
+  fieldNotFound: 'FIELD_NOT_FOUND',
+  fieldSearchFailed: 'FIELD_SEARCH_FAILED',
+  conversationNotFound: 'CONVERSATION_NOT_FOUND',
+  conversationSourceUnavailable: 'CONVERSATION_SOURCE_UNAVAILABLE',
+  invalidConsultationTransition: 'INVALID_CONSULTATION_TRANSITION',
+  rateLimited: 'RATE_LIMITED',
+  persistenceUnavailable: 'PERSISTENCE_UNAVAILABLE',
+  notFound: 'NOT_FOUND',
+} as const;
+
+export type ApiErrorCode = (typeof API_ERROR_CODES)[keyof typeof API_ERROR_CODES];
+
 
 export interface AskRequest {
   question: string;

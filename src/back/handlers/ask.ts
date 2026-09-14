@@ -14,7 +14,16 @@ import { openSession } from '@/back/adapters/session';
 import { MemoryThrottle } from '@/back/framework/throttle';
 import { runAsk } from '@/back/steps';
 import type { AskResponse } from '@/shared/contract';
+import { API_ERROR_CODES } from '@/shared/contract';
 import { fail, ok, tooMany, type HandlerResult } from './types';
+
+/**
+ * 链路内部错误的码。
+ *
+ * 刻意**不在前端那份公开错误码清单里** —— 内部异常不该让前端做特殊处理，
+ * 走通用错误提示即可。`ApiErrorEnvelope.code` 是 `z.string()`，所以合法。
+ */
+const INTERNAL_ERROR = 'INTERNAL_ERROR';
 
 /**
  * 进程内限流。默认 10 分钟 20 次/客户端 —— 正常人够用，
@@ -58,7 +67,9 @@ export async function handleAsk(input: AskInput): Promise<HandlerResult> {
     }
   }
 
-  if (!input.body) return fail(400, '请求体不是合法 JSON');
+  if (!input.body) {
+    return fail(400, API_ERROR_CODES.invalidSearchRequest, '请求体不是合法 JSON');
+  }
 
   const question = typeof input.body.question === 'string' ? input.body.question.trim() : '';
 
@@ -69,18 +80,27 @@ export async function handleAsk(input: AskInput): Promise<HandlerResult> {
     try {
       experiment = resolveExperiment(input.body.experiment).id;
     } catch (error) {
-      return fail(400, error instanceof Error ? error.message : '未知的实验分组');
+      return fail(
+        400,
+        API_ERROR_CODES.invalidSearchRequest,
+        error instanceof Error ? error.message : '未知的实验分组',
+      );
     }
   }
 
   if (question.length < MIN_QUESTION_CHARS) {
     return fail(
       400,
+      API_ERROR_CODES.invalidSearchRequest,
       `请把问题描述得再具体一些（至少 ${MIN_QUESTION_CHARS} 个字），包括你的处境和纠结点`,
     );
   }
   if (question.length > MAX_QUESTION_CHARS) {
-    return fail(400, `问题过长（${question.length} 字），请压缩到 ${MAX_QUESTION_CHARS} 字以内`);
+    return fail(
+      400,
+      API_ERROR_CODES.invalidSearchRequest,
+      `问题过长（${question.length} 字），请压缩到 ${MAX_QUESTION_CHARS} 字以内`,
+    );
   }
 
   const session = openSession(input.sessionToken);
@@ -100,6 +120,11 @@ export async function handleAsk(input: AskInput): Promise<HandlerResult> {
     return ok(result);
   } catch (error) {
     console.error('[ask] 流水线失败：', error);
-    return fail(500, error instanceof Error ? error.message : '未知错误');
+    return fail(
+      500,
+      INTERNAL_ERROR,
+      error instanceof Error ? error.message : '未知错误',
+      true,
+    );
   }
 }

@@ -49,7 +49,8 @@ function section(title) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function getJson(pathname, init) {
-  const res = await fetch(`${BASE}${pathname}`, init);
+  const res = await fetch(`${BASE}${pathname}`, init ?? { headers: cookieHeaders() });
+  absorbCookies(res);
   let body = null;
   try {
     body = await res.json();
@@ -57,6 +58,100 @@ async function getJson(pathname, init) {
     /* 非 JSON */
   }
   return { status: res.status, body, headers: res.headers };
+}
+
+/**
+ * 极简 cookie 罐。
+ *
+ * 必须要有：会话身份靠一枚 `zh_guest` cookie 维持，而 Node 的 fetch **不会**
+ * 自动保存/回传 cookie。不带它的话，每一次 `POST /conversations` 都会被当成
+ * 全新访客，从而每次都新建一个会话 —— 「幂等命中已有会话」这条就永远测不出来，
+ * 而且会误判成后端 bug。
+ */
+let cookieJar = '';
+
+function absorbCookies(res) {
+  const raw =
+    typeof res.headers.getSetCookie === 'function'
+      ? res.headers.getSetCookie()
+      : [res.headers.get('set-cookie')].filter(Boolean);
+  for (const c of raw) {
+    const pair = c.split(';')[0];
+    if (!pair) continue;
+    const name = pair.split('=')[0];
+    const kept = cookieJar
+      .split('; ')
+      .filter((p) => p && !p.startsWith(`${name}=`));
+    kept.push(pair);
+    cookieJar = kept.join('; ');
+  }
+}
+
+function cookieHeaders() {
+  return cookieJar ? { Cookie: cookieJar } : {};
+}
+
+/** 普通 JSON POST。给会话 / 咨询这类一次性返回的接口用。 */
+async function postJson(pathname, payload, timeoutMs = 60000) {
+  try {
+    const res = await fetch(`${BASE}${pathname}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookieHeaders() },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    absorbCookies(res);
+    let body = null;
+    try {
+      body = await res.json();
+    } catch {
+      /* 非 JSON */
+    }
+    return { status: res.status, body };
+  } catch (error) {
+    return { status: -1, body: { error: String(error?.message ?? error) } };
+  }
+}
+
+/**
+ * NDJSON 流式 POST。给会话内 Agent 用。
+ *
+ * 与 `postAsk` 分开是刻意的：那是**搜索**流（`run.*` 事件 + 阶段），
+ * 这是**会话**流（`agent.*` 事件 + 消息增量）。两套协议字段不同，
+ * 合成一个 helper 就会有一半的参数是另一半用不到的。
+ */
+async function postNdjson(pathname, payload, timeoutMs = 120000) {
+  try {
+    const res = await fetch(`${BASE}${pathname}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookieHeaders() },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    absorbCookies(res);
+    const contentType = res.headers.get('content-type') ?? '';
+    const raw = await res.text();
+    const events = raw
+      .split('\n')
+      .filter((line) => line.trim())
+      .map((line) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+    return { status: res.status, isNdjson: contentType.includes('ndjson'), contentType, events, raw };
+  } catch (error) {
+    return {
+      status: -1,
+      isNdjson: false,
+      contentType: '',
+      events: [],
+      error: String(error?.message ?? error),
+    };
+  }
 }
 
 /**
@@ -415,6 +510,17 @@ async function main() {
       '无意义查询返回空 items（不是错误，也不是全部领域）',
       ((await getJson(`/api/fields?query=${encodeURIComponent('不存在的领域xyz')}`)).body?.items ?? [])
         .length === 0,
+    );
+    // 回归断言：曾经因为 `Number(limit)` 在缺省时得到 0、再被夹成 1，
+    // 导致不带 limit 的搜索**只返回 1 条领域**。前端调用时通常不带 limit，
+    // 所以这是真实路径，而且它不报错 —— 只能靠断言盯着。
+    const fsNoLimit = await getJson(`/api/fields?query=${encodeURIComponent('大模型')}`);
+    check(
+      '领域搜索不带 limit 时返回全部命中（不被截断成 1 条）',
+      (fsNoLimit.body?.items?.length ?? 0) >= 2,
+      `${fsNoLimit.body?.items?.length} 条：${(fsNoLimit.body?.items ?? [])
+        .map((f) => f.name)
+        .join('/')}`,
     );
     check('领域搜索缺 query 返回 400', (await getJson('/api/fields')).status === 400);
     const badReq = await getJson('/api/fields');
@@ -881,6 +987,261 @@ async function main() {
       generic.body?.contentOnly?.length > 0,
       `${generic.body?.contentOnly?.length ?? 0} 条内容`,
     );
+
+    // ── 会话 / 消息 / 咨询 / 会话内 Agent ────────────────────────────────
+    section('咨询套餐（纯静态，几乎不会失败）');
+    const keysOf2 = (o) => JSON.stringify(Object.keys(o ?? {}).sort());
+    const pkgs = await getJson('/api/consultation/packages');
+    const pkgItems = pkgs.body?.items ?? [];
+    check('返回 { items }（恰好一个键）', keysOf2(pkgs.body) === '["items"]', keysOf2(pkgs.body));
+    check('套餐是三个（文字 / 30 分钟 / 60 分钟）', pkgItems.length === 3, String(pkgItems.length));
+    check(
+      '每个套餐恰好 5 个键，且金额是人民币分（非负整数）',
+      pkgItems.every(
+        (p) =>
+          keysOf2(p) === '["amount","currency","description","id","name"]' &&
+          p.currency === 'CNY' &&
+          Number.isInteger(p.amount) &&
+          p.amount >= 0,
+      ),
+      pkgItems.map((p) => `${p.id}:${p.amount}`).join(' / '),
+    );
+
+    section('会话：创建 / 幂等 / 读取');
+    // 用真实人物开会话：从领域星图里取一个（星图只认真实语料）
+    const graphForChat = await getJson('/api/fields/agent-dev/graph');
+    const chatPerson = graphForChat.body?.people?.[0];
+    check('取到用于开会话的真实人物', Boolean(chatPerson?.id), chatPerson?.id ?? '(空)');
+
+    const convPath = '/api/conversations';
+    const created = await postJson(convPath, {
+      creatorId: chatPerson?.id ?? '',
+      sourceRunId: null,
+    });
+    check('创建会话返回 201', created.status === 201, `HTTP ${created.status}`);
+    const conv = created.body?.conversation;
+    check(
+      '会话恰好 7 个键（前端 .strict()，多一个键整条作废）',
+      keysOf2(conv) ===
+        '["consultation","createdAt","creator","id","sourceRunId","updatedAt","user"]',
+      keysOf2(conv),
+    );
+    check(
+      '咨询子对象恰好 5 个键，初始为 free_chat 且无金额',
+      keysOf2(conv?.consultation) === '["amount","id","packageId","status","updatedAt"]' &&
+        conv?.consultation?.status === 'free_chat' &&
+        conv?.consultation?.amount === null,
+      JSON.stringify(conv?.consultation),
+    );
+    check(
+      '未登录也能开会话（前端聊天页没有 RequireAuth）',
+      Boolean(conv?.user?.id && conv?.user?.displayName === '访客'),
+      `${conv?.user?.id} / ${conv?.user?.displayName}`,
+    );
+
+    // 幂等：同一入口重复调用必须回到同一个会话，否则用户连点两次就有两个会话
+    const again = await postJson(convPath, {
+      creatorId: chatPerson?.id ?? '',
+      sourceRunId: null,
+    });
+    check(
+      '重复创建命中已有会话（200 + 同一个 id）',
+      again.status === 200 && again.body?.conversation?.id === conv?.id,
+      `HTTP ${again.status} · ${again.body?.conversation?.id}`,
+    );
+
+    const gid = conv?.id ?? '';
+    const fetched = await getJson(`/api/conversations/${gid}`);
+    check('按 id 读回会话', fetched.status === 200 && fetched.body?.conversation?.id === gid);
+    check(
+      '未知会话返回 404 + CONVERSATION_NOT_FOUND（不给重试）',
+      (await getJson('/api/conversations/00000000-0000-4000-8000-000000000000')).body?.code ===
+        'CONVERSATION_NOT_FOUND',
+    );
+
+    section('消息：列表 / 发送 / 幂等');
+    const msgs0 = await getJson(`/api/conversations/${gid}/messages`);
+    check(
+      '列表返回 { items, nextCursor }（恰好两个键）',
+      keysOf2(msgs0.body) === '["items","nextCursor"]',
+      keysOf2(msgs0.body),
+    );
+    check(
+      '开场的系统消息说明了「对面是 Agent」（不得伪装成真人）',
+      msgs0.body?.items?.[0]?.sender === 'system' &&
+        String(msgs0.body?.items?.[0]?.content ?? '').includes('AI Agent'),
+      msgs0.body?.items?.[0]?.content?.slice(0, 30) ?? '(空)',
+    );
+    check(
+      '消息恰好 6 个键',
+      keysOf2(msgs0.body?.items?.[0]) ===
+        '["clientMessageId","content","conversationId","createdAt","id","sender"]',
+      keysOf2(msgs0.body?.items?.[0]),
+    );
+
+    const cid = `e2e-msg-${Date.now()}`;
+    const sent = await postJson(`/api/conversations/${gid}/messages`, {
+      clientMessageId: cid,
+      actorRole: 'seeker',
+      content: '我在大厂做了七年产品，现在有个创业公司的机会，想听听你的判断。',
+    });
+    check('发消息返回 200 + { message }', sent.status === 200 && Boolean(sent.body?.message?.id));
+    check('发送方是 seeker', sent.body?.message?.sender === 'seeker');
+
+    const sentTwice = await postJson(`/api/conversations/${gid}/messages`, {
+      clientMessageId: cid,
+      actorRole: 'seeker',
+      content: '我在大厂做了七年产品，现在有个创业公司的机会，想听听你的判断。',
+    });
+    check(
+      '同一个 clientMessageId 重复提交不产生第二条（断线重发的安全网）',
+      sentTwice.body?.message?.id === sent.body?.message?.id,
+      `${sent.body?.message?.id} vs ${sentTwice.body?.message?.id}`,
+    );
+    const msgs1 = await getJson(`/api/conversations/${gid}/messages`);
+    check(
+      '消息总数只增加 1 条',
+      msgs1.body?.items?.length === (msgs0.body?.items?.length ?? 0) + 1,
+      `${msgs0.body?.items?.length} → ${msgs1.body?.items?.length}`,
+    );
+    // 回归断言：曾经因为 `Number(limit ?? null)` 得到 0、再被夹成 1，
+    // 导致缺省 limit 时列表**只返回一条**。这个 bug 不报错，只能靠断言盯着。
+    check(
+      '不带 limit 时不被静默截断成 1 条（Number(null)=0 的坑）',
+      (msgs1.body?.items?.length ?? 0) > 1,
+      `实际 ${msgs1.body?.items?.length} 条`,
+    );
+    check(
+      '空内容被拒（400 + INVALID_MESSAGE）',
+      (await postJson(`/api/conversations/${gid}/messages`, {
+        clientMessageId: 'e2e-empty',
+        actorRole: 'seeker',
+        content: '   ',
+      })).body?.code === 'INVALID_MESSAGE',
+    );
+
+    section('咨询状态机（后端持有，前端不推导）');
+    const act = (action, actorRole, packageId) =>
+      postJson(`/api/conversations/${gid}/consultation/actions`, {
+        action,
+        actorRole,
+        ...(packageId ? { packageId } : {}),
+      });
+
+    const st = async () => (await getJson(`/api/conversations/${gid}`)).body?.conversation
+      ?.consultation;
+
+    const a1 = await act('propose', 'seeker');
+    check('seeker 发起申请 → proposed', a1.body?.consultation?.status === 'proposed', a1.body?.error?.message ?? '');
+    check(
+      '响应同时给出状态与系统消息',
+      keysOf2(a1.body) === '["consultation","systemMessage"]' &&
+        a1.body?.systemMessage?.sender === 'system',
+      keysOf2(a1.body),
+    );
+
+    const bad = await act('propose', 'seeker');
+    check('重复 propose 被拒（409）', bad.status === 409, `HTTP ${bad.status}`);
+    check(
+      '错误码是 INVALID_CONSULTATION_TRANSITION',
+      bad.body?.code === 'INVALID_CONSULTATION_TRANSITION',
+      bad.body?.code ?? '(空)',
+    );
+    check(
+      'details 里是**完整的 Consultation 对象**（前端据此回正，不是只回状态字符串）',
+      keysOf2(bad.body?.details) === '["amount","id","packageId","status","updatedAt"]',
+      keysOf2(bad.body?.details),
+    );
+    check('非法流转不给重试按钮', bad.body?.retryable === false);
+
+    const a2 = await act('create_offer', 'creator', 'voice-30');
+    check(
+      'creator 建方案 → offer_created，且金额来自套餐（29900 分）',
+      a2.body?.consultation?.status === 'offer_created' &&
+        a2.body?.consultation?.amount === 29900 &&
+        a2.body?.consultation?.packageId === 'voice-30',
+      JSON.stringify(a2.body?.consultation),
+    );
+    check(
+      'create_offer 缺合法套餐时被拒',
+      (await act('create_offer', 'creator', 'no-such-package')).status === 409,
+    );
+
+    const a3 = await act('confirm_mock_payment', 'seeker');
+    check(
+      'seeker 模拟支付 → mock_paid，金额沿用（不丢）',
+      a3.body?.consultation?.status === 'mock_paid' && a3.body?.consultation?.amount === 29900,
+      JSON.stringify(a3.body?.consultation),
+    );
+
+    const a4 = await act('start_consultation', 'creator');
+    check('creator 开始咨询 → consulting', a4.body?.consultation?.status === 'consulting', a4.body?.error?.message ?? '');
+    check(
+      '模拟支付不产生真实订单（文案里写明）',
+      String(a3.body?.systemMessage?.content ?? '').includes('不会创建真实订单'),
+      a3.body?.systemMessage?.content ?? '(空)',
+    );
+    check(
+      '角色错位被拒：seeker 不能 start_consultation',
+      (await act('start_consultation', 'seeker')).status === 409,
+    );
+
+    section('会话内 Agent（NDJSON 流式）');
+    const runCid = `e2e-agent-${Date.now()}`;
+    const agentStream = await postNdjson(
+      `/api/conversations/${gid}/agent-runs`,
+      { clientMessageId: runCid, content: '我该不该为了期权降薪去创业公司？' },
+    );
+    const evTypes = agentStream.events.map((e) => e.type);
+    check('HTTP 200 且 Content-Type 是 ndjson', agentStream.isNdjson, agentStream.contentType);
+    check(
+      '事件顺序：run.started → message.started → delta… → message.completed',
+      evTypes[0] === 'agent.run.started' &&
+        evTypes[1] === 'agent.message.started' &&
+        evTypes.includes('agent.message.delta') &&
+        evTypes[evTypes.length - 1] === 'agent.message.completed',
+      evTypes.join(' → ').slice(0, 120),
+    );
+    const started = agentStream.events.find((e) => e.type === 'agent.run.started');
+    check(
+      'run.started 带回**服务端已保存的**用户消息（前端用它替换临时气泡）',
+      started?.userMessage?.clientMessageId === runCid && Boolean(started?.userMessage?.id),
+      started?.userMessage?.id ?? '(空)',
+    );
+    const agentMsg = agentStream.events.find((e) => e.type === 'agent.message.completed')?.message;
+    check('完成事件里是完整的 agent 消息', agentMsg?.sender === 'agent', agentMsg?.sender ?? '(空)');
+    check(
+      'Agent 消息恰好 6 个键，且 clientMessageId 为 null（不是客户端产生的）',
+      keysOf2(agentMsg) ===
+        '["clientMessageId","content","conversationId","createdAt","id","sender"]' &&
+        agentMsg?.clientMessageId === null,
+      keysOf2(agentMsg),
+    );
+    check('回答非空', String(agentMsg?.content ?? '').trim().length > 0);
+
+    const msgs2 = await getJson(`/api/conversations/${gid}/messages`);
+    const savedAgent = (msgs2.body?.items ?? []).find((m) => m.sender === 'agent');
+    check('Agent 回复已落库（刷新后还在）', Boolean(savedAgent?.id), savedAgent?.id ?? '(空)');
+    check(
+      '用户消息也落库了，且只有一条（幂等）',
+      (msgs2.body?.items ?? []).filter((m) => m.clientMessageId === runCid).length === 1,
+    );
+
+    section('重置会话');
+    const reset = await postJson(`/api/conversations/${gid}/reset`, {});
+    check(
+      '重置返回 { conversation, messages }',
+      keysOf2(reset.body) === '["conversation","messages"]',
+      keysOf2(reset.body),
+    );
+    check('消息回到只有开场一条', reset.body?.messages?.length === 1, String(reset.body?.messages?.length));
+    check(
+      '咨询回到 free_chat，金额清空',
+      reset.body?.conversation?.consultation?.status === 'free_chat' &&
+        reset.body?.conversation?.consultation?.amount === null,
+      JSON.stringify(reset.body?.conversation?.consultation),
+    );
+    check('会话 id 不变（前端是整体替换，不是跳新路由）', reset.body?.conversation?.id === gid);
 
     if (WITH_THROTTLE) {
       section('额度防护（限流）');

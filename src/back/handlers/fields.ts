@@ -18,6 +18,7 @@ import {
   type FieldIndex,
 } from '@/back/domain/field-graph';
 import { FIELD_SEEDS, findFieldSeed } from '@/back/domain/fields';
+import { pageLimit } from '@/back/framework/params';
 import type { SearchHit } from '@/back/framework/ports';
 import {
   API_ERROR_CODES,
@@ -162,10 +163,9 @@ export async function handleSearchFields(input: FieldSearchInput): Promise<Handl
   const indexes = await loadFieldIndexes();
   const all = searchFields(indexes, query);
 
-  // limit 来自查询串，可能是 'abc' 或负数 —— NaN 会让 slice 返回空数组，
-  // 表现成「搜什么都搜不到」，比报错更难查。所以先判有限再把区间夹住。
-  const rawLimit = Number(input.limit);
-  const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(Math.trunc(rawLimit), 50)) : 12;
+  // 查询串里的 limit 可能是 'abc' 或 '-3'，这里统一夹到 1~50；
+  // 非法值与缺省都回落到 12（见 framework/params.ts 里 Number(null)=0 的说明）。
+  const limit = pageLimit(input.limit, 12, 50);
 
   // 空结果**不是错误**：返回 { items: [] }，由前端展示「没有匹配的领域」。
   // 契约里没有 total —— 前端只认 items，多给一个键反而会让整条响应判为非法。

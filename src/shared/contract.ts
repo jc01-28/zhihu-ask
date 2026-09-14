@@ -546,6 +546,165 @@ export const runPath = (runId: string): string =>
 export const conversationPath = (id: string): string =>
   `${API_ROUTES.conversations}/${encodeURIComponent(id)}`;
 
+export const conversationMessagesPath = (id: string): string =>
+  `${conversationPath(id)}/messages`;
+
+export const conversationAgentRunsPath = (id: string): string =>
+  `${conversationPath(id)}/agent-runs`;
+
+export const conversationResetPath = (id: string): string =>
+  `${conversationPath(id)}/reset`;
+
+export const conversationConsultationActionsPath = (id: string): string =>
+  `${conversationPath(id)}/consultation/actions`;
+
+/** ── 会话与咨询 ────────────────────────────────────────────────────────── */
+
+/**
+ * 消息发送方。
+ *
+ * ⚠️ `agent` 是**私有 Agent**，前端必须显示为「AI Agent」，
+ * **不得伪装成真实答主** —— 这是产品诚实性的底线，也是评审会盯的地方。
+ */
+export type MessageSender = 'seeker' | 'creator' | 'agent' | 'system';
+
+export interface ConversationMessage {
+  id: string;
+  conversationId: string;
+  /**
+   * 前端生成的幂等键：同一个 id 重复提交**不得产生第二条消息**。
+   * 系统消息与 Agent 消息没有客户端来源，为 `null`。
+   */
+  clientMessageId: string | null;
+  sender: MessageSender;
+  content: string;
+  /** ISO 8601 */
+  createdAt: string;
+}
+
+export type ConsultationStatus =
+  | 'free_chat'
+  | 'proposed'
+  | 'offer_created'
+  | 'mock_paid'
+  | 'consulting';
+
+export type ConsultationPackageId = 'text' | 'voice-30' | 'voice-60';
+
+export type ActorRole = 'seeker' | 'creator';
+
+export type ConsultationAction =
+  | 'propose'
+  | 'cancel'
+  | 'create_offer'
+  | 'withdraw_offer'
+  | 'confirm_mock_payment'
+  | 'start_consultation';
+
+/**
+ * 咨询状态。**由后端持有，前端只提交动作、不自行推导下一状态** ——
+ * 所以非法流转时后端要把完整的 `Consultation` 放进 `details` 让前端「回正」，
+ * 而不是只回一个状态字符串。
+ */
+export interface Consultation {
+  id: string;
+  status: ConsultationStatus;
+  packageId: ConsultationPackageId | null;
+  /** 人民币**分**，非负整数 */
+  amount: number | null;
+  updatedAt: string;
+}
+
+export interface ConsultationPackage {
+  id: ConsultationPackageId;
+  name: string;
+  description: string;
+  /** 人民币分 */
+  amount: number;
+  currency: 'CNY';
+}
+
+export interface Conversation {
+  id: string;
+  user: PublicUser;
+  creator: CreatorCard;
+  /** 发起会话的那次搜索；来自领域星图时为 null */
+  sourceRunId: string | null;
+  consultation: Consultation;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** `POST /api/conversations` 的请求体 */
+export interface CreateConversationRequest {
+  creatorId: string;
+  /** 来自搜索结果时是 uuid，来自领域星图时是 null */
+  sourceRunId: string | null;
+}
+
+export interface ConversationEnvelope {
+  conversation: Conversation;
+}
+
+export interface MessageListResponse {
+  items: ConversationMessage[];
+  /** 没有更多时为 null */
+  nextCursor: string | null;
+}
+
+export interface MessageEnvelope {
+  message: ConversationMessage;
+}
+
+/** `POST /conversations/:id/messages` 的请求体 */
+export interface SendMessageRequest {
+  clientMessageId: string;
+  /** 普通用户只能发 seeker；答主演示消息需要服务端允许，否则 403 */
+  actorRole: ActorRole;
+  content: string;
+}
+
+/** `POST /conversations/:id/agent-runs` 的请求体 */
+export interface AgentMessageRequest {
+  clientMessageId: string;
+  content: string;
+}
+
+export interface ResetConversationResponse {
+  conversation: Conversation;
+  messages: ConversationMessage[];
+}
+
+export interface ConsultationActionRequest {
+  action: ConsultationAction;
+  actorRole: ActorRole;
+  /** 仅 `create_offer` 需要 */
+  packageId?: string;
+}
+
+export interface ConsultationActionResponse {
+  consultation: Consultation;
+  /** sender 恒为 'system'：状态变化要在聊天流里留下痕迹 */
+  systemMessage: ConversationMessage;
+}
+
+export interface ConsultationPackageList {
+  items: ConsultationPackage[];
+}
+
+/**
+ * 会话内 Agent 的流式事件（NDJSON，一行一个）。
+ *
+ * 与搜索流（`/api/agent/search`）是**两套协议、两套字段**，不要混：
+ * 这里发的是消息增量，那边发的是检索阶段。
+ */
+export type ConversationAgentEvent =
+  | { type: 'agent.run.started'; requestId: string; userMessage: ConversationMessage }
+  | { type: 'agent.message.started'; messageId: string }
+  | { type: 'agent.message.delta'; messageId: string; delta: string }
+  | { type: 'agent.message.completed'; message: ConversationMessage }
+  | { type: 'agent.run.failed'; requestId: string; error: ApiErrorEnvelope };
+
 /**
  * 公开用户视图。
  * **不是** OAuth UID，也不是数据库主键 —— 前端只需要一个稳定的展示身份。

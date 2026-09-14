@@ -309,3 +309,77 @@ test("未发送的草稿在刷新后仍在，发送后清空", async ({ page }) 
   await page.reload();
   await expect(page.getByLabel("消息输入框")).toHaveValue("");
 });
+
+test("桌面聊天栏固定在首屏高度内，消息区独立滚动", async ({ page }) => {
+  await page.goto("/app/find");
+  await page.getByLabel("你现在想找什么样的人？").fill(QUERY);
+  await page.getByRole("button", { name: /开始找人/ }).click();
+  await expect(page.getByText(/本次找到 3 位有内容证据的人选/)).toBeVisible({
+    timeout: 20_000,
+  });
+  await page.getByRole("button", { name: /与 TA 聊聊/ }).first().click();
+  await expect(page.getByText(/与 林知行 的虚拟对话/)).toBeVisible();
+
+  const metrics = await page.evaluate(() => {
+    const panel = document.querySelector("[data-testid='chat-panel']");
+    const messages = document.querySelector("[aria-label='会话消息']");
+    if (!(panel instanceof HTMLElement) || !(messages instanceof HTMLElement)) {
+      throw new Error("聊天面板或消息列表不存在");
+    }
+    const panelRect = panel.getBoundingClientRect();
+    const grid = panel.parentElement;
+    return {
+      panelBottom: panelRect.bottom,
+      panelHeight: panelRect.height,
+      messageOverflowY: getComputedStyle(messages).overflowY,
+      messageMinHeight: getComputedStyle(messages).minHeight,
+      gridAlignItems: grid ? getComputedStyle(grid).alignItems : "",
+    };
+  });
+
+  expect(metrics.panelBottom).toBeLessThanOrEqual(900);
+  expect(metrics.panelHeight).toBeLessThanOrEqual(760);
+  expect(metrics.messageOverflowY).toBe("auto");
+  expect(metrics.messageMinHeight).toBe("0px");
+  expect(metrics.gridAlignItems).toBe("flex-start");
+
+  const consultationCard = page
+    .locator("[data-slot='card']")
+    .filter({ hasText: "付费咨询" })
+    .first();
+  const privateAgentCard = page
+    .locator("[data-slot='card']")
+    .filter({ hasText: "私有知识库 Agent" })
+    .first();
+
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  const [consultationBox, privateAgentBox] = await Promise.all([
+    consultationCard.boundingBox(),
+    privateAgentCard.boundingBox(),
+  ]);
+
+  expect(consultationBox).not.toBeNull();
+  expect(privateAgentBox).not.toBeNull();
+  expect(consultationBox!.y + consultationBox!.height).toBeLessThanOrEqual(
+    privateAgentBox!.y + 1,
+  );
+});
+
+test("功能首页两个蓝色入口按钮在桌面端对齐", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop-chromium", "移动端入口卡片按列展示");
+  await page.goto("/app");
+
+  const fieldsLink = page.getByRole("link", { name: /浏览专业领域/ });
+  const findLink = page.getByRole("link", { name: /描述问题找人/ });
+  await expect(fieldsLink).toBeVisible();
+  await expect(findLink).toBeVisible();
+
+  const [fieldsBox, findBox] = await Promise.all([
+    fieldsLink.boundingBox(),
+    findLink.boundingBox(),
+  ]);
+
+  expect(fieldsBox).not.toBeNull();
+  expect(findBox).not.toBeNull();
+  expect(Math.abs(fieldsBox!.y - findBox!.y)).toBeLessThanOrEqual(1);
+});

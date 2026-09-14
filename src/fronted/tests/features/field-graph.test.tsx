@@ -19,6 +19,14 @@ async function renderGraph(
 }
 
 describe("领域星图", () => {
+  it("使用星座式关系画布，包含渐变光晕与曲线连线", async () => {
+    const { canvas } = await renderGraph();
+
+    expect(canvas).toHaveAttribute("data-graph-theme", "constellation");
+    expect(canvas.querySelector("svg defs")).not.toBeNull();
+    expect(canvas.querySelectorAll("path.graph-edge-enter").length).toBeGreaterThan(0);
+  });
+
   it("展示领域中心、议题节点与人物节点", async () => {
     const { canvas } = await renderGraph();
     const scope = within(canvas);

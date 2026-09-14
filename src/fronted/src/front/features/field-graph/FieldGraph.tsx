@@ -33,6 +33,18 @@ const DRAG_THRESHOLD = 4;
 const TOPIC_DELAY = { base: 80, stagger: 30, max: 380 } as const;
 const PERSON_DELAY = { base: 140, stagger: 30, max: 620 } as const;
 
+function curvedPath(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  bend = 0.12,
+): string {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const controlX = (from.x + to.x) / 2 - dy * bend;
+  const controlY = (from.y + to.y) / 2 + dx * bend;
+  return `M ${from.x} ${from.y} Q ${controlX} ${controlY} ${to.x} ${to.y}`;
+}
+
 /**
  * 领域星图。
  *
@@ -132,13 +144,14 @@ export function FieldGraph({
       {/* 桌面：完整星图 */}
       <div
         data-testid="field-graph-canvas"
-        className="hidden overflow-hidden rounded-2xl border border-border bg-white md:block"
+        data-graph-theme="constellation"
+        className="field-graph-shell hidden overflow-hidden rounded-2xl border border-slate-800 md:block"
       >
         <svg
           viewBox={`0 0 ${GRAPH_VIEWBOX.width} ${GRAPH_VIEWBOX.height}`}
           role="group"
           aria-label={`${graph.field.name} 领域星图`}
-          className="h-[560px] w-full touch-none select-none bg-[radial-gradient(circle_at_50%_45%,#f2f7ff,transparent_62%)]"
+          className="field-graph-svg h-[560px] w-full touch-none select-none"
           onPointerDown={(event) => {
             dragRef.current = {
               x: event.clientX,
@@ -180,21 +193,55 @@ export function FieldGraph({
             dragRef.current = null;
           }}
         >
+          <defs>
+            <radialGradient id="graph-surface-glow" cx="50%" cy="45%" r="65%">
+              <stop offset="0%" stopColor="#1d4ed8" stopOpacity="0.28" />
+              <stop offset="48%" stopColor="#172554" stopOpacity="0.16" />
+              <stop offset="100%" stopColor="#020617" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="graph-center-gradient" cx="35%" cy="25%" r="85%">
+              <stop offset="0%" stopColor="#60a5fa" />
+              <stop offset="55%" stopColor="#2563eb" />
+              <stop offset="100%" stopColor="#1e3a8a" />
+            </radialGradient>
+            <filter id="graph-glow" x="-80%" y="-80%" width="260%" height="260%">
+              <feGaussianBlur stdDeviation="8" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <pattern id="graph-stars" width="84" height="84" patternUnits="userSpaceOnUse">
+              <circle cx="8" cy="18" r="1" fill="#bfdbfe" opacity="0.22" />
+              <circle cx="58" cy="46" r="1.2" fill="#93c5fd" opacity="0.16" />
+              <circle cx="32" cy="72" r="0.8" fill="#e0f2fe" opacity="0.18" />
+            </pattern>
+          </defs>
+          <rect width={GRAPH_VIEWBOX.width} height={GRAPH_VIEWBOX.height} fill="#020617" />
+          <rect
+            width={GRAPH_VIEWBOX.width}
+            height={GRAPH_VIEWBOX.height}
+            fill="url(#graph-surface-glow)"
+          />
+          <rect
+            width={GRAPH_VIEWBOX.width}
+            height={GRAPH_VIEWBOX.height}
+            fill="url(#graph-stars)"
+          />
           <g transform={`translate(${offset.x} ${offset.y}) scale(${scale})`}>
             {/* 中心 → 议题 */}
             {layout.topics.map((topic) => {
               const point = toViewBox(topic);
               const index = topicIndex.get(topic.id) ?? 0;
               return (
-                <line
+                <path
                   key={`edge-center-${topic.id}`}
                   className="graph-edge-enter"
-                  x1={center.x}
-                  y1={center.y}
-                  x2={point.x}
-                  y2={point.y}
-                  stroke={activeIndex === null || activeIndex === index ? GRAPH_EDGE : "#e8edf5"}
-                  strokeWidth={2}
+                  d={curvedPath(center, point, 0.08)}
+                  fill="none"
+                  stroke={activeIndex === null || activeIndex === index ? GRAPH_EDGE : "#1e293b"}
+                  strokeWidth={1.8}
+                  strokeLinecap="round"
                 />
               );
             })}
@@ -211,15 +258,14 @@ export function FieldGraph({
               return group.people.map((node) => {
                 const point = toViewBox(node);
                 return (
-                  <line
+                  <path
                     key={`edge-${group.id}-${node.person.id}`}
                     className="graph-edge-enter"
-                    x1={anchor.x}
-                    y1={anchor.y}
-                    x2={point.x}
-                    y2={point.y}
+                    d={curvedPath(anchor, point, 0.1)}
+                    fill="none"
                     stroke={topicSoftColor(topicIndex.get(group.topicId ?? "") ?? 0)}
-                    strokeWidth={2}
+                    strokeWidth={1.7}
+                    strokeLinecap="round"
                   />
                 );
               });

@@ -52,7 +52,7 @@ export function MessageList({
 }) {
   return (
     <div
-      className="flex-1 space-y-4 overflow-y-auto bg-slate-50/50 p-4 sm:p-6"
+      className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-slate-50/50 p-4 sm:p-6"
       aria-label="会话消息"
     >
       {nextCursor && (

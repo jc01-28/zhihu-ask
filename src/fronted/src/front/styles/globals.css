@@ -139,6 +139,16 @@ textarea {
   animation: edge-enter 0.4s ease-out both;
 }
 
+.field-graph-shell {
+  background:
+    radial-gradient(circle at 50% 45%, rgba(59, 130, 246, 0.14), transparent 38%),
+    #020617;
+}
+
+.field-graph-svg {
+  background: #020617;
+}
+
 /* ---- 减少动效 ---- */
 /*
  * 只压时长是不够的：星图的中心 → 议题 → 人物分层入场靠的是 animation-delay，

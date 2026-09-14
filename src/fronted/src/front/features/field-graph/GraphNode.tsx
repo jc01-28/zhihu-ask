@@ -48,11 +48,20 @@ export function PersonNode({
       <circle
         cx={x}
         cy={y}
+        r={PERSON_RADIUS + 9}
+        fill={color}
+        opacity={dimmed ? 0.04 : 0.2}
+        filter="url(#graph-glow)"
+        aria-hidden="true"
+      />
+      <circle
+        cx={x}
+        cy={y}
         r={PERSON_RADIUS}
         fill={color}
         opacity={dimmed ? 0.28 : 1}
-        stroke="#ffffff"
-        strokeWidth={3}
+        stroke="#bfdbfe"
+        strokeWidth={2.5}
       />
       <text
         x={x}
@@ -78,9 +87,21 @@ export function PersonNode({
       >
         {person.name}
       </text>
+      <rect
+        x={x - 26}
+        y={y + PERSON_RADIUS + 20}
+        width={52}
+        height={18}
+        rx={9}
+        fill="#0f1b31"
+        stroke="#334155"
+        strokeWidth={1}
+        opacity={dimmed ? 0.35 : 0.9}
+        aria-hidden="true"
+      />
       <text
         x={x}
-        y={y + PERSON_RADIUS + 32}
+        y={y + PERSON_RADIUS + 33}
         textAnchor="middle"
         fontSize={11}
         fill={GRAPH_MUTED}
@@ -135,10 +156,11 @@ export function TopicNode({
         width={TOPIC_WIDTH}
         height={TOPIC_HEIGHT}
         rx={16}
-        fill={active ? color : "#ffffff"}
+        fill={active ? color : "#0f1b31"}
         stroke={color}
-        strokeWidth={active ? 0 : 2}
+        strokeWidth={active ? 1 : 1.5}
         opacity={dimmed ? 0.4 : 1}
+        filter={active ? "url(#graph-glow)" : undefined}
       />
       <text
         x={x}
@@ -172,8 +194,25 @@ export function CenterNode({
 }) {
   return (
     <g className="graph-node-enter" style={{ animationDelay: `${delayMs}ms` }} aria-hidden="true">
-      <circle cx={x} cy={y} r={CENTER_RADIUS + 12} fill="#e8f1ff" opacity={0.7} />
-      <circle cx={x} cy={y} r={CENTER_RADIUS} fill="#056de8" />
+      <circle
+        cx={x}
+        cy={y}
+        r={CENTER_RADIUS + 16}
+        fill="#2563eb"
+        opacity={0.22}
+        filter="url(#graph-glow)"
+      />
+      <circle
+        cx={x}
+        cy={y}
+        r={CENTER_RADIUS + 7}
+        fill="none"
+        stroke="#60a5fa"
+        strokeWidth={1.5}
+        strokeDasharray="3 6"
+        opacity={0.7}
+      />
+      <circle cx={x} cy={y} r={CENTER_RADIUS} fill="url(#graph-center-gradient)" />
       <text
         x={x}
         y={y + 4}

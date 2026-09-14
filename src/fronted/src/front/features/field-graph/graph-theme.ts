@@ -18,9 +18,9 @@ export const TOPIC_HEX = [
 /** 「其他」分组使用中性灰：它不是一个真实议题，不应该获得主题色。 */
 export const OTHER_HEX = "#64748b";
 
-export const GRAPH_INK = "#0f172a";
-export const GRAPH_MUTED = "#64748b";
-export const GRAPH_EDGE = "#cbd5e1";
+export const GRAPH_INK = "#e2e8f0";
+export const GRAPH_MUTED = "#94a3b8";
+export const GRAPH_EDGE = "#334155";
 
 export function topicColor(index: number): string {
   return TOPIC_HEX[((index % TOPIC_HEX.length) + TOPIC_HEX.length) % TOPIC_HEX.length];

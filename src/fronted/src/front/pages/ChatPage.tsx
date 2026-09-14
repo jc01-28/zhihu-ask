@@ -27,7 +27,7 @@ function ChatSkeleton() {
           <Skeleton className="h-9 w-56" />
         </div>
       </div>
-      <div className="mx-auto grid max-w-[1440px] gap-4 p-4 sm:p-6 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
+      <div className="mx-auto grid max-w-[1440px] items-start gap-4 p-4 sm:p-6 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
         <Skeleton className="h-64 w-full rounded-2xl" />
         <Skeleton className="h-[680px] w-full rounded-2xl" />
         <Skeleton className="h-64 w-full rounded-2xl" />
@@ -125,7 +125,7 @@ export function ChatPage() {
           : "模拟聊天：消息不会发送给真实知乎用户；付费咨询不会产生订单或扣款。"}
       </div>
 
-      <div className="mx-auto grid max-w-[1440px] gap-4 p-4 sm:p-6 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
+      <div className="mx-auto grid max-w-[1440px] items-start gap-4 p-4 sm:p-6 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
         <aside className="space-y-4">
           <Card className="gap-4 rounded-2xl py-5 shadow-none">
             <CardHeader className="px-5">
@@ -179,7 +179,10 @@ export function ChatPage() {
           </Card>
         </aside>
 
-        <section className="flex min-h-[680px] flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
+        <section
+          data-testid="chat-panel"
+          className="flex min-h-[680px] min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-sm xl:h-[calc(100vh-10rem)] xl:min-h-[560px] xl:max-h-[760px]"
+        >
           <MessageList
             items={conversation.items}
             viewerRole={conversation.viewerRole}

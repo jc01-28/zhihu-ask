@@ -58,7 +58,7 @@ export function PortalChoice({ entry }: { entry: PortalEntryId }) {
   const Icon = item.icon;
 
   return (
-    <Card className="card-enter group gap-0 rounded-2xl py-0 shadow-sm transition-shadow hover:shadow-[0_18px_48px_rgba(19,52,95,.12)]">
+    <Card className="card-enter group h-full gap-0 rounded-2xl py-0 shadow-sm transition-shadow hover:shadow-[0_18px_48px_rgba(19,52,95,.12)]">
       <CardHeader className="gap-3 px-6 py-6">
         <span className={`grid size-11 place-items-center rounded-2xl ${item.tone}`}>
           <Icon className="size-5" />
@@ -67,7 +67,7 @@ export function PortalChoice({ entry }: { entry: PortalEntryId }) {
         <h2 className="text-xl font-semibold leading-none">{item.title}</h2>
         <CardDescription className="leading-6">{item.description}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4 px-6 pb-6">
+      <CardContent className="flex flex-1 flex-col px-6 pb-6">
         <ul className="space-y-2 text-sm text-muted-foreground">
           {item.bullets.map((bullet) => (
             <li key={bullet} className="flex items-center gap-2">
@@ -75,13 +75,15 @@ export function PortalChoice({ entry }: { entry: PortalEntryId }) {
               {bullet}
             </li>
           ))}
-        </ul>
-        <Button asChild className="h-11 w-full rounded-xl text-base">
-          <Link to={item.to}>
-            {item.cta}
-            <ArrowRight className="transition-transform group-hover:translate-x-0.5" />
-          </Link>
-        </Button>
+          </ul>
+        <div className="mt-auto pt-4">
+          <Button asChild className="h-11 w-full rounded-xl text-base">
+            <Link to={item.to}>
+              {item.cta}
+              <ArrowRight className="transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

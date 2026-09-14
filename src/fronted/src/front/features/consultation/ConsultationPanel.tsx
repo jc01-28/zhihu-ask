@@ -51,7 +51,7 @@ export function ConsultationPanel({
   const busy = actionPending || packages.length === 0;
 
   return (
-    <Card className="sticky top-24 gap-4 rounded-2xl py-5 shadow-none">
+    <Card className="gap-4 rounded-2xl py-5 shadow-none">
       <CardHeader className="px-5">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2">

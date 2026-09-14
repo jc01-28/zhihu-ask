@@ -22,7 +22,16 @@ export async function handleHealth(): Promise<HandlerResult> {
     mode: fixtureMode ? 'fixtures' : 'live',
     configured: {
       accessSecret: Boolean(process.env.ZHIHU_ACCESS_SECRET),
-      oauth: Boolean(process.env.ZHIHU_APP_ID && process.env.ZHIHU_APP_KEY),
+      /**
+       * ⚠️ App Key 必须**两个名字都认**，和 `zhihu-oauth.ts` 保持一致。
+       * 官方模板用 `ZHIHU_OAUTH_APP_KEY`（为和开放平台 Access Secret 区分），
+       * 这里曾经只判 `ZHIHU_APP_KEY` ⇒ 明明配好了却报 `oauth: false`，
+       * 把排查方向整个带偏（部署后就是被这个误报骗了一轮）。
+       */
+      oauth: Boolean(
+        process.env.ZHIHU_APP_ID &&
+          (process.env.ZHIHU_OAUTH_APP_KEY || process.env.ZHIHU_APP_KEY),
+      ),
       oauthRedirect: process.env.ZHIHU_REDIRECT_URI ?? null,
       sessionSecret: Boolean(process.env.SESSION_SECRET),
       llmProvider: process.env.LLM_PROVIDER || 'zhida',

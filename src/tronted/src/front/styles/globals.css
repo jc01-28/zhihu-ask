@@ -1,0 +1,171 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+:root {
+  --background: #f6f8fb;
+  --foreground: #121212;
+  --card: #ffffff;
+  --card-foreground: #121212;
+  --popover: #ffffff;
+  --popover-foreground: #121212;
+  --primary: #056de8;
+  --primary-foreground: #ffffff;
+  --secondary: #eef6ff;
+  --secondary-foreground: #075fc9;
+  --muted: #f1f4f8;
+  --muted-foreground: #667085;
+  --accent: #eaf3ff;
+  --accent-foreground: #075fc9;
+  --destructive: #d14343;
+  --border: #e4e9f0;
+  --input: #dce3ec;
+  --ring: #8fc2ff;
+  --radius: 0.75rem;
+  --font-sans: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: var(--font-sans);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+.hero-grid {
+  background-color: #f8fbff;
+  background-image:
+    radial-gradient(circle at 12% 16%, rgba(5, 109, 232, 0.13), transparent 31%),
+    radial-gradient(circle at 90% 84%, rgba(108, 92, 231, 0.1), transparent 28%),
+    linear-gradient(rgba(96, 132, 177, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(96, 132, 177, 0.055) 1px, transparent 1px);
+  background-size: auto, auto, 32px 32px, 32px 32px;
+}
+
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.card-enter {
+  animation: card-enter 0.35s ease-out both;
+}
+
+/* ---- 星图节点 ---- */
+/* transform-box: fill-box 让缩放围绕节点自身，而不是 SVG 原点。 */
+@keyframes node-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.graph-node-enter {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: node-enter 0.32s ease-out both;
+}
+
+@keyframes edge-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.graph-edge-enter {
+  animation: edge-enter 0.4s ease-out both;
+}
+
+/* ---- 减少动效 ---- */
+/*
+ * 只压时长是不够的：星图的中心 → 议题 → 人物分层入场靠的是 animation-delay，
+ * 若延迟还在，节点会先隐形再逐个闪现，反而比不做动画更糟。
+ * 因此这里同时把 delay 归零，并且额外支持 `<html data-reduced-motion="true">`
+ * 这个由 `src/front/shared/motion.ts` 写入的开关——媒体查询在某些嵌入式
+ * WebView 里不可靠，双保险可以保证开关一定生效。
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+}
+
+[data-reduced-motion="true"] *,
+[data-reduced-motion="true"] *::before,
+[data-reduced-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0s !important;
+}

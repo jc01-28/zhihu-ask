@@ -1,0 +1,3 @@
+# Windows 下创建符号链接常被系统策略拒绝（os error 2），
+# 改用扁平目录布局，避免依赖 symlink；版本锁定仍由 pnpm-lock.yaml 负责。
+nodeLinker: hoisted

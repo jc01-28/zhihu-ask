@@ -13,6 +13,7 @@
  * 只需替换 runPipeline 这个 driver，步骤本身不用动。
  */
 
+import { randomUUID } from 'node:crypto';
 import { Cache, ContentSource, LlmClient, QuotaGuard } from './ports';
 
 export interface Logger {
@@ -132,10 +133,19 @@ export interface PipelineOutcome {
   totalMs: number;
 }
 
-function newRunId(now: number): string {
-  return `${new Date(now).toISOString().replace(/[:.]/g, '-')}-${Math.random()
-    .toString(36)
-    .slice(2, 7)}`;
+/**
+ * runId 必须是**标准 UUID**。
+ *
+ * 前端契约（`shared/contracts/search.ts`、`agent.ts`）用 `z.string().uuid()` 校验它。
+ * 原来的「ISO 时间戳 + 随机串」格式（`2026-09-14T11-30-00-000Z-abc12`）会被直接判非法，
+ * 而且**整个 `run.completed` 事件都会作废** —— 一次搜索的结果就此全丢，
+ * 在后端却看不到任何异常（只是日志里一个 uuid 校验失败）。
+ *
+ * 可读性由 `.artifacts/<uuid>/` 的目录内容保证（每步产物都在里面），
+ * 不需要把时间戳编进 id。
+ */
+function newRunId(): string {
+  return randomUUID();
 }
 
 /**
@@ -225,7 +235,7 @@ export async function runPipeline(
 
   const now = ctx.now ?? (() => Date.now());
   const startedAt = now();
-  const runId = newRunId(startedAt);
+  const runId = newRunId();
   const cacheTtlMs = opts.cacheTtlMs ?? 24 * 60 * 60 * 1000;
 
   const artifacts: Record<string, unknown> = { [SYS_INPUT]: boot };

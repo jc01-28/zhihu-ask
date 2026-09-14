@@ -17,6 +17,7 @@
 
 import type { SearchHit } from '@/back/framework/ports';
 import type { FieldSummary, PersonNode, TopicNode } from '@/shared/contract';
+import { avatarToneOf, initialOf, personIdOf } from './avatar';
 import type { FieldSeed, FieldTopicSeed } from './fields';
 
 /**
@@ -33,45 +34,11 @@ const MAX_BODY_HITS_PER_KEYWORD = 5;
 /** 低于这个分数的人不进星图，避免噪声 */
 const MIN_PERSON_SCORE = 3;
 
-/** 头像底色候选。用固定调色板而不是随机色，保证同一人永远同色 */
-const AVATAR_TONES = [
-  '#2F6FED',
-  '#1D9E75',
-  '#D85A30',
-  '#7F77DD',
-  '#EF9F27',
-  '#639922',
-  '#A855F7',
-  '#0E7490',
-];
-
-/** FNV-1a。要的是**跨环境确定性**，不是密码学强度 —— 所以不用 crypto */
-function hash32(seed: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i += 1) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
 /**
- * 人物 id：只由**作者名**决定，不含领域。
- * 这样同一个人出现在多个领域时 id 一致，前端可以据此去重或跳转到同一张名片。
+ * 头像与标识的小工具已抽到 `./avatar`（人物卡那边也要用，放这里会变成反向依赖）。
+ * 这里 re-export，保持既有引用不破。
  */
-export function personIdOf(authorName: string): string {
-  return `p_${hash32(authorName).toString(36)}`;
-}
-
-/** 头像占位字：中文取首字，英文取首字母 */
-export function initialOf(name: string): string {
-  const first = Array.from(name.trim())[0] ?? '?';
-  return first.toUpperCase();
-}
-
-export function avatarToneOf(id: string): string {
-  return AVATAR_TONES[hash32(id) % AVATAR_TONES.length];
-}
+export { avatarToneOf, initialOf, personIdOf } from './avatar';
 
 /** 统计关键词出现次数（大小写不敏感） */
 function countOccurrences(haystack: string, needle: string, cap: number): number {
@@ -200,6 +167,39 @@ function totalScore(person: PersonAggregate): number {
   return [...person.topicScores.values()].reduce((a, b) => a + b, 0);
 }
 
+/**
+ * 某人在该领域内的相关度，**0~100**。
+ *
+ * ⚠️ 与星图里用的是**同一套归一化**。分两处各写一遍的话，
+ * 同一个人会在星图上显示 80、在人物名片里显示 0.8 —— 前后端立刻就会打架。
+ */
+export function personRelevance(index: FieldIndex, person: PersonAggregate): number {
+  const maxScore = index.people.length ? totalScore(index.people[0]) : 1;
+  return Math.round(
+    Math.max(10, Math.min(100, (totalScore(person) / Math.max(1, maxScore)) * 100)),
+  );
+}
+
+/** 该人关联的议题**名称**，按得分从高到低（与 `topicIds` 的排序一致） */
+export function topicNamesOf(index: FieldIndex, person: PersonAggregate): string[] {
+  return [...person.topicScores.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([topicId]) => index.field.topics.find((t) => t.id === topicId)?.name)
+    .filter((name): name is string => Boolean(name));
+}
+
+/** 在全部领域索引里按 `personId` 找人 —— `GET /api/creators/:id` 用它 */
+export function findPersonInIndexes(
+  indexes: FieldIndex[],
+  personId: string,
+): { index: FieldIndex; person: PersonAggregate } | null {
+  for (const index of indexes) {
+    const person = index.people.find((p) => p.id === personId);
+    if (person) return { index, person };
+  }
+  return null;
+}
+
 // ── 领域摘要 ────────────────────────────────────────────────────────────
 
 export function toFieldSummary(field: FieldSeed, index: FieldIndex): FieldSummary {
@@ -263,8 +263,6 @@ export function layoutFieldGraph(
     position: positions.get(topic.id)!,
   }));
 
-  const maxScore = index.people.length ? totalScore(index.people[0]) : 1;
-
   const people: PersonNode[] = index.people.map((person) => ({
     id: person.id,
     name: person.name,
@@ -273,8 +271,8 @@ export function layoutFieldGraph(
     initial: initialOf(person.name),
     avatarTone: avatarToneOf(person.id),
     topicIds: [...person.topicScores.keys()],
-    // 契约要求 0~100。最低给 10：相关度再低也是真实挂靠，不该缩成一个点
-    relevance: Math.round(Math.max(10, Math.min(100, (totalScore(person) / Math.max(1, maxScore)) * 100))),
+    // 与人物名片共用同一套归一化（见 personRelevance）
+    relevance: personRelevance(index, person),
     /**
      * 知乎**搜索接口不返回作者主页标识**（见 DEVELOPER.md §9 的协议偏差），
      * 所以这里如实给 null，而不是按姓名拼一个知乎搜索链接 ——

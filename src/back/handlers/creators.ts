@@ -20,7 +20,7 @@ import { httpsOrNull, personIdOf } from '@/back/domain/avatar';
 import { toFieldCreatorCard } from '@/back/domain/creator-card';
 import { findPersonInIndexes, personRelevance, topicNamesOf } from '@/back/domain/field-graph';
 import type { SearchHit } from '@/back/framework/ports';
-import { API_ERROR_CODES } from '@/shared/contract';
+import { API_ERROR_CODES, type CreatorCard } from '@/shared/contract';
 import { loadFieldIndexes } from './fields';
 import { fail, ok, type HandlerResult } from './types';
 
@@ -89,18 +89,19 @@ async function loadRegistry(): Promise<Map<string, PersonRecord>> {
   return map;
 }
 
-export async function handleCreatorDetail(creatorId: string): Promise<HandlerResult> {
+/**
+ * 取一张人物卡。查不到返回 `null`。
+ *
+ * 抽成独立函数是因为**会话也要内嵌同一张卡**（`Conversation.creator`）——
+ * 两处各查一次的话，名片和聊天页顶部的头像可能来自不同时刻的注册表，
+ * 同一个人在两个页面显示不一致。
+ */
+export async function getCreatorCard(creatorId: string): Promise<CreatorCard | null> {
   const id = creatorId.trim();
-  if (!id) {
-    return fail(400, API_ERROR_CODES.notFound, '缺少创作者 id');
-  }
+  if (!id) return null;
 
   const record = (await loadRegistry()).get(id);
-  if (!record) {
-    // 前端按 404 NOT_FOUND 处理：提示资料缺失，但**保留当前页面上下文**
-    // （用户是从星图点进来的，把他弹回首页会很突兀）
-    return fail(404, API_ERROR_CODES.notFound, '这位创作者的公开资料暂不可用', false);
-  }
+  if (!record) return null;
 
   // 如果这个人也挂在某个领域下，就带上领域语境（关联议题、领域相关度）
   const indexes = await loadFieldIndexes();
@@ -108,17 +109,15 @@ export async function handleCreatorDetail(creatorId: string): Promise<HandlerRes
 
   if (found) {
     const { index, person } = found;
-    return ok(
-      toFieldCreatorCard({
-        id: record.id,
-        name: record.name,
-        headline: record.headline || person.headline,
-        avatarUrl: record.avatarUrl ?? person.avatarUrl,
-        topicNames: topicNamesOf(index, person),
-        relevance: personRelevance(index, person),
-        fieldName: index.field.name,
-      }),
-    );
+    return toFieldCreatorCard({
+      id: record.id,
+      name: record.name,
+      headline: record.headline || person.headline,
+      avatarUrl: record.avatarUrl ?? person.avatarUrl,
+      topicNames: topicNamesOf(index, person),
+      relevance: personRelevance(index, person),
+      fieldName: index.field.name,
+    });
   }
 
   /**
@@ -128,15 +127,23 @@ export async function handleCreatorDetail(creatorId: string): Promise<HandlerRes
    * 没有关于他和某个问题的经历证据。所以如实给：无证据、无追问建议、
    * 局限里写明「这份资料来自公开内容，未针对具体问题核验」。
    */
-  return ok(
-    toFieldCreatorCard({
-      id: record.id,
-      name: record.name,
-      headline: record.headline,
-      avatarUrl: record.avatarUrl,
-      topicNames: [],
-      relevance: 0,
-      fieldName: '公开内容',
-    }),
-  );
+  return toFieldCreatorCard({
+    id: record.id,
+    name: record.name,
+    headline: record.headline,
+    avatarUrl: record.avatarUrl,
+    topicNames: [],
+    relevance: 0,
+    fieldName: '公开内容',
+  });
+}
+
+export async function handleCreatorDetail(creatorId: string): Promise<HandlerResult> {
+  const card = await getCreatorCard(creatorId);
+  if (!card) {
+    // 前端按 404 NOT_FOUND 处理：提示资料缺失，但**保留当前页面上下文**
+    // （用户是从星图点进来的，把他弹回首页会很突兀）
+    return fail(404, API_ERROR_CODES.notFound, '这位创作者的公开资料暂不可用', false);
+  }
+  return ok(card);
 }

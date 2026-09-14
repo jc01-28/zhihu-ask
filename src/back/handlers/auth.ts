@@ -76,7 +76,7 @@ export interface AuthSessionInput {
  * `avatarUrl` 必须由我们这边把住 https：契约里这个字段会被**直接塞进 `<img src>`**，
  * 放行 `http:` 或 `data:` 就是注入面（前端 schema 也会拒，但后端不该把责任推过去）。
  */
-function toPublicUser(profile: MyProfile | null | undefined): PublicUser | null {
+export function toPublicUser(profile: MyProfile | null | undefined): PublicUser | null {
   const name = profile?.name?.trim() ?? '';
   const url = profile?.url?.trim() ?? '';
   if (!name && !url) return null;

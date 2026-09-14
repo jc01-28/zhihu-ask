@@ -11,10 +11,10 @@
 import { resolveExperiment, type ExperimentId } from '@/back/domain/experiment';
 import { toPhases } from '@/back/domain/phases';
 import { openSession } from '@/back/adapters/session';
-import { MemoryThrottle } from '@/back/framework/throttle';
 import { runAsk } from '@/back/steps';
 import type { AskResponse } from '@/shared/contract';
 import { API_ERROR_CODES } from '@/shared/contract';
+import { checkRate } from './rate-limit';
 import { fail, ok, tooMany, type HandlerResult } from './types';
 
 /**
@@ -24,18 +24,6 @@ import { fail, ok, tooMany, type HandlerResult } from './types';
  * 走通用错误提示即可。`ApiErrorEnvelope.code` 是 `z.string()`，所以合法。
  */
 const INTERNAL_ERROR = 'INTERNAL_ERROR';
-
-/**
- * 进程内限流。默认 10 分钟 20 次/客户端 —— 正常人够用，
- * 但能挡住「连点几十次把当天额度烧穿」这种情况。
- * 可用 ASK_RATE_LIMIT / ASK_RATE_WINDOW_MS 调整，设为 0 关闭。
- */
-const throttle = new MemoryThrottle(
-  Number(process.env.ASK_RATE_LIMIT ?? 20),
-  Number(process.env.ASK_RATE_WINDOW_MS ?? 600000),
-);
-
-const rateLimitEnabled = Number(process.env.ASK_RATE_LIMIT ?? 20) > 0;
 
 /**
  * 问题长度区间。**与前端规格对齐**：4 ~ 300 字。
@@ -57,14 +45,13 @@ export interface AskInput {
 }
 
 export async function handleAsk(input: AskInput): Promise<HandlerResult> {
-  if (rateLimitEnabled) {
-    const verdict = throttle.check(input.clientKey);
-    if (!verdict.ok) {
-      return tooMany(
-        verdict.retryAfterSec,
-        '这是为了保护知乎开放平台的每日调用额度，避免演示期间额度被烧穿',
-      );
-    }
+  // 与 /api/agent/search **共用同一份限流计数**（见 rate-limit.ts 的说明）
+  const verdict = checkRate(input.clientKey);
+  if (!verdict.ok) {
+    return tooMany(
+      verdict.retryAfterSec,
+      '这是为了保护知乎开放平台的每日调用额度，避免演示期间额度被烧穿',
+    );
   }
 
   if (!input.body) {

@@ -208,6 +208,23 @@ export interface ContextDeps {
   now?(): number;
 }
 
+/**
+ * 步骤事件。**面向观察者**（流式进度、日志、监控），不参与业务计算。
+ *
+ * 框架刻意不定义「阶段」这个概念 —— 那是产品叙事，属于上层。
+ * 这里只如实报告「第几个步骤、开始还是结束、花了多久、产出了什么」。
+ */
+export interface PipelineStepEvent {
+  step: string;
+  phase: 'started' | 'completed';
+  /** 从 1 开始的序号；`total` 是本条流水线的步骤总数 */
+  index: number;
+  total: number;
+  status?: StepStatus;
+  ms?: number;
+  summary?: string;
+}
+
 export interface RunPipelineOptions {
   cacheTtlMs?: number;
   /** 本轮的实验配置，会作为 ctx.config 暴露给每个步骤 */
@@ -223,6 +240,16 @@ export interface RunPipelineOptions {
    * 而且每步都命中缓存、trace 全绿，看起来完全正常。这个坑真踩到了。
    */
   cacheNamespace?: string;
+  /**
+   * 每步开始 / 结束时的回调。**我们用它把进度以 NDJSON 流式推给前端。**
+   *
+   * 两个刻意的设计：
+   *   1. 回调是**同步**的 —— 只允许入队，不允许在里面 await 长任务，
+   *      否则它会拖慢链路本身；
+   *   2. 回调抛错**不影响链路**（见下面的 `emit`）—— 进度是给人看的，
+   *      不该因为它把一次搜索整个弄失败。
+   */
+  onStep?: (event: PipelineStepEvent) => void;
 }
 
 export async function runPipeline(
@@ -240,6 +267,19 @@ export async function runPipeline(
 
   const artifacts: Record<string, unknown> = { [SYS_INPUT]: boot };
   const trace: TraceEntry[] = [];
+  const total = pipeline.steps.length;
+
+  /** 发事件。**回调失败一律吞掉**：进度是给人看的，不该把一次搜索弄失败。 */
+  const emit = (event: PipelineStepEvent) => {
+    if (!opts.onStep) return;
+    try {
+      opts.onStep(event);
+    } catch (error) {
+      ctx.logger.warn(
+        `onStep 回调失败（已忽略，不影响链路）：${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
 
   const full: StepContext = {
     ...ctx,
@@ -260,9 +300,21 @@ export async function runPipeline(
     const stepStart = now();
     const label = `${String(index + 1).padStart(2, '0')}-${step.name}`;
 
+    // 先报「开始了」再干活 —— 否则前端只能等这一步结束才知道它在跑
+    emit({ step: step.name, phase: 'started', index: index + 1, total });
+
     try {
       if (step.shouldRun && !(await step.shouldRun(input, full))) {
-        trace.push({ step: step.name, status: 'skipped', ms: now() - stepStart });
+        const ms = now() - stepStart;
+        trace.push({ step: step.name, status: 'skipped', ms });
+        emit({
+          step: step.name,
+          phase: 'completed',
+          index: index + 1,
+          total,
+          status: 'skipped',
+          ms,
+        });
         ctx.logger.info(`跳过 ${label}：shouldRun=false`);
         continue;
       }
@@ -289,13 +341,31 @@ export async function runPipeline(
       artifacts[step.name] = output;
       await full.saveArtifact(step.name, index, output);
       const summary = step.summarize ? step.summarize(output) : autoSummary(output);
-      trace.push({ step: step.name, status, ms: now() - stepStart, summary });
-      ctx.logger.info(
-        `${label} ${status} (${now() - stepStart}ms)${summary ? ` · ${summary}` : ''}`,
-      );
+      const ms = now() - stepStart;
+      trace.push({ step: step.name, status, ms, summary });
+      emit({
+        step: step.name,
+        phase: 'completed',
+        index: index + 1,
+        total,
+        status,
+        ms,
+        summary,
+      });
+      ctx.logger.info(`${label} ${status} (${ms}ms)${summary ? ` · ${summary}` : ''}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      trace.push({ step: step.name, status: 'failed', ms: now() - stepStart, error: message });
+      const ms = now() - stepStart;
+      trace.push({ step: step.name, status: 'failed', ms, error: message });
+      emit({
+        step: step.name,
+        phase: 'completed',
+        index: index + 1,
+        total,
+        status: 'failed',
+        ms,
+        summary: message,
+      });
       ctx.logger.error(`${label} failed: ${message}`);
       if (!step.optional) throw error;
     }

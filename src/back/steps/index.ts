@@ -9,7 +9,7 @@
  * 「下一步做什么」。需要自主性的只有 Triage 的三路分支，而那是分类结果，不是决策。
  */
 
-import { runPipeline, type Pipeline } from '@/back/framework/pipeline';
+import { runPipeline, type Pipeline, type PipelineStepEvent } from '@/back/framework/pipeline';
 import type { AskResult } from '@/back/domain/types';
 import {
   DEFAULT_EXPERIMENT,
@@ -58,6 +58,14 @@ export interface RunAskOptions {
   useCache?: boolean;
   /** 实验分组：A 纯关键词 / B 纯语义 / C 完整链路。默认 C */
   experiment?: ExperimentId;
+  /**
+   * 每步的实时回调。**流式进度**用它。
+   *
+   * 刻意是同步、且失败被引擎吞掉（见 `runPipeline` 的 `emit`）：
+   * 进度是给人看的，不该因为它把一次搜索整个弄失败。
+   * 回调里只允许入队，不要 await 长任务 —— 那会拖慢链路本身。
+   */
+  onStep?: (event: PipelineStepEvent) => void;
 }
 
 export async function runAsk(
@@ -80,6 +88,7 @@ export async function runAsk(
     config: boot,
     // 换数据源 / 换语料范围后不能读到上一轮的缓存结果（见 cacheNamespace 的说明）
     cacheNamespace: cacheNamespace(),
+    onStep: opts.onStep,
   });
 
   if (!outcome.result) {

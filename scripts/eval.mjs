@@ -105,7 +105,11 @@ async function ask(question, experiment) {
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const startedAt = Date.now();
   try {
-    const res = await fetch(`${BASE}/api/agent/search`, {
+    // ⚠️ 评测打 `/api/ask`，**不是** `/api/agent/search`：
+    // 前者返回链路的原始产物（`AskResult`：recommendations / trace / metrics），
+    // 后者返回映射后的产品 DTO（`PersonSearchResult`：cards）并且是 NDJSON 流。
+    // 对照实验要看的是**链路本身**，所以用前者。
+    const res = await fetch(`${BASE}/api/ask`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, experiment }),
@@ -117,7 +121,8 @@ async function ask(question, experiment) {
       return { ok: false, ms, error: `HTTP ${res.status}: ${text.slice(0, 300)}` };
     }
     const body = JSON.parse(text);
-    return { ok: true, ms, data: body.data };
+    // 响应体**就是**链路产物本身，没有 { status, data } 外壳（契约见 shared/contract.ts）
+    return { ok: true, ms, data: body };
   } catch (error) {
     return { ok: false, ms: Date.now() - startedAt, error: String(error.message ?? error) };
   } finally {

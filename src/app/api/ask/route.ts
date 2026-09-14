@@ -4,9 +4,13 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 /**
- * @deprecated 已迁移到 `POST /api/agent/search`（采用前端规格的命名）。
+ * **内部链路调试口**：返回链路的原始产物 `AskResult`（8 步 trace / route / metrics / 证据）。
  *
- * 这个路径保留**只是为了兼容既有脚本**（`scripts/e2e.mjs`、`scripts/eval.mjs` 直接打它）。
- * 新代码一律用 `/api/agent/search`。等脚本都切过去后，这个文件可以删掉。
+ * 为什么保留它，而不是被 `/api/agent/search` 取代：
+ *   · `/api/agent/search` 返回的是**映射后的产品 DTO**（`PersonSearchResult`，NDJSON 流），
+ *     它服务于界面；
+ *   · 而**评测与 e2e 要看的是链路本身** —— `scripts/eval.mjs` 算 Top-3 有效人选率、
+ *     证据覆盖率用的是 `recommendations[].candidate.experiences`，那是链路产物里的东西。
+ * 两者服务不同读者，所以并存。**前端不要用这个口**：它没有流式、也没有契约保障。
  */
 export const POST = askRoute;

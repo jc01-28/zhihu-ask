@@ -60,34 +60,94 @@ async function getJson(pathname, init) {
 }
 
 /**
- * 带超时的 POST。默认打**新路径** `/api/agent/search`（前端规格的命名）。
+ * 带超时的 POST。
+ *
+ * ⚠️ `/api/agent/search` 返回的是 **NDJSON 流**（`application/x-ndjson`），
+ * 不是单个 JSON —— 这里把它收敛成统一的形状：
+ *   · `body`      = `run.completed.result`（失败时为 null），让其它用例不用关心流
+ *   · `events`    = 逐行解析出的事件数组，**流式协议本身也需要被验证**
+ *   · `errorCode` = `run.failed` 里的错误码（HTTP 状态恒为 200，见路由注释）
+ *
  * 显式设超时是必须的：一旦被测服务因为外部依赖挂住，我们要得到一个**命名的失败用例**，
  * 而不是让整个测试脚本崩掉、把后面的用例也一起吞掉。
  */
 async function postAsk(question, pathname = '/api/agent/search', timeoutMs = 180000) {
   try {
+    /**
+     * ⚠️ 两个端点的请求字段名**不一样**，这里必须按路径选：
+     *   · `/api/agent/search`（契约）→ `{ query, sessionId }`
+     *   · `/api/ask`（旧链路调试口）→ `{ question }`
+     * 发错了会被 `.strict()` 直接拒掉 —— 这是刻意的，也正是它该有的行为。
+     */
+    const payload =
+      pathname === '/api/ask' ? { question } : { query: question, sessionId: 'e2e-session' };
+
     const res = await fetch(`${BASE}${pathname}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(timeoutMs),
     });
+
+    const contentType = res.headers.get('content-type') ?? '';
+    const raw = await res.text();
+
+    if (contentType.includes('ndjson')) {
+      const events = raw
+        .split('\n')
+        .filter((line) => line.trim())
+        .map((line) => {
+          try {
+            return JSON.parse(line);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+
+      const completed = events.find((e) => e.type === 'run.completed');
+      const failed = events.find((e) => e.type === 'run.failed');
+      return {
+        status: res.status,
+        body: completed?.result ?? null,
+        events,
+        isStream: true,
+        errorCode: failed?.error?.code ?? null,
+        errorMessage: failed?.error?.message ?? null,
+        contentType,
+        raw,
+      };
+    }
+
     let body = null;
     try {
-      body = await res.json();
+      body = JSON.parse(raw);
     } catch {
       /* 非 JSON */
     }
-    return { status: res.status, body };
+    return {
+      status: res.status,
+      body,
+      events: [],
+      isStream: false,
+      errorCode: body?.code ?? null,
+      errorMessage: body?.message ?? body?.error ?? null,
+      contentType,
+      raw,
+    };
   } catch (error) {
     const isTimeout = error?.name === 'TimeoutError' || error?.name === 'AbortError';
     return {
       status: isTimeout ? 0 : -1,
-      body: {
-        error: isTimeout
-          ? `请求超过 ${timeoutMs / 1000}s 未返回 —— 检查是否有出站调用没设超时（LLM_TIMEOUT_MS / ZHIHU_TIMEOUT_MS）`
-          : String(error?.message ?? error),
-      },
+      body: null,
+      events: [],
+      isStream: false,
+      errorCode: isTimeout ? 'TIMEOUT' : 'NETWORK_ERROR',
+      errorMessage: isTimeout
+        ? `请求超过 ${timeoutMs / 1000}s 未返回 —— 检查是否有出站调用没设超时（LLM_TIMEOUT_MS / ZHIHU_TIMEOUT_MS）`
+        : String(error?.message ?? error),
+      contentType: '',
+      raw: '',
     };
   }
 }
@@ -236,18 +296,68 @@ async function main() {
     );
 
     section('输入校验（4~300 字，与前端规格一致）');
+    // ⚠️ 流式端点的失败也走**流内事件**，HTTP 状态恒为 200（流一旦开始写就改不了状态码）。
+    // 所以这里断言的是**错误码**，不是状态码。
     const tooShort = await postAsk('太短');
-    check('过短问题被拒（400）', tooShort.status === 400, tooShort.body?.error ?? '');
+    check(
+      '过短问题 → INVALID_SEARCH_REQUEST',
+      tooShort.errorCode === 'INVALID_SEARCH_REQUEST',
+      `${tooShort.errorCode} · ${tooShort.errorMessage ?? ''}`,
+    );
     const tooLong = await postAsk('测'.repeat(1200));
-    check('超长问题被拒（400）', tooLong.status === 400, tooLong.body?.error ?? '');
+    check(
+      '超长问题 → INVALID_SEARCH_REQUEST',
+      tooLong.errorCode === 'INVALID_SEARCH_REQUEST',
+      `${tooLong.errorCode} · ${tooLong.errorMessage ?? ''}`,
+    );
+
+    /** 把一段 NDJSON 文本解析成事件数组（这里刻意不用 postAsk，因为要发非法请求体） */
+    const parseNdjson = (text) =>
+      text
+        .split('\n')
+        .filter((l) => l.trim())
+        .map((l) => {
+          try {
+            return JSON.parse(l);
+          } catch {
+            return { type: '__unparsable__', line: l };
+          }
+        });
+
+    // 契约是 .strict()：多一个字段前端就拒整条请求，所以后端也应主动拒绝
+    const extraField = await fetch(`${BASE}/api/agent/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: '这是一个长度足够的问题描述文本',
+        sessionId: 'e2e',
+        bogus: 1,
+      }),
+    });
+    const extraEvents = parseNdjson(await extraField.text());
+    check(
+      '请求体多余字段被拒（契约是 .strict()）',
+      extraEvents.some(
+        (e) => e.type === 'run.failed' && e.error?.code === 'INVALID_SEARCH_REQUEST',
+      ),
+      extraEvents.find((e) => e.type === 'run.failed')?.error?.message ?? '(未收到 run.failed)',
+    );
+
     const badJson = await fetch(`${BASE}/api/agent/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{not json',
     });
-    check('非法 JSON 被拒（400）', badJson.status === 400);
+    const badJsonEvents = parseNdjson(await badJson.text());
+    check(
+      '非法 JSON → 流内 run.failed（而不是 400 裸响应）',
+      badJsonEvents.some(
+        (e) => e.type === 'run.failed' && e.error?.code === 'INVALID_SEARCH_REQUEST',
+      ),
+      badJsonEvents.find((e) => e.type === 'run.failed')?.error?.message ?? '(未收到 run.failed)',
+    );
 
-    section('端点迁移：新路径可用，旧路径仍兼容');
+    section('端点迁移：旧路径仍兼容');
     const legacy = await postAsk('我在大厂做产品 7 年，该不该去创业公司？', '/api/ask');
     check(
       '废弃路径 /api/ask 仍返回 200（兼容旧脚本）',
@@ -436,10 +546,189 @@ async function main() {
       (hot.body?.topics ?? []).every((t) => typeof t.url === 'string' && t.url.startsWith('https://')),
     );
 
+    // ── 流式协议 ──────────────────────────────────────────────────────────
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const STEP_ORDER = [
+      'loading_context',
+      'understanding',
+      'retrieving',
+      'verifying',
+      'ranking',
+      'saving',
+    ];
+
+    section('★ 流式协议（NDJSON）');
+    const streamed = await postAsk(
+      '我在大厂做产品 7 年，收到一家 50 人 AI 创业公司的 offer，固定薪资降 20% 但有期权，该不该去？',
+    );
+    const events = streamed.events;
+
+    check('Content-Type 是 application/x-ndjson', streamed.contentType.includes('ndjson'), streamed.contentType);
+    check(
+      '响应是逐行 JSON（每一行都能独立解析）',
+      events.length > 0 && !events.some((e) => e.type === '__unparsable__'),
+      `${events.length} 个事件`,
+    );
+    check(
+      '每行以 \\n 结尾（NDJSON 的硬要求，前端按行切分）',
+      streamed.raw.endsWith('\n'),
+    );
+    check(
+      '第一个事件是 run.started 且带 uuid 的 requestId',
+      events[0]?.type === 'run.started' && UUID_RE.test(events[0]?.requestId ?? ''),
+      events[0] ? JSON.stringify(events[0]) : '(空)',
+    );
+    check(
+      '最后一个事件是 run.completed',
+      events.at(-1)?.type === 'run.completed',
+      events.at(-1)?.type ?? '(空)',
+    );
+
+    const startedSteps = events.filter((e) => e.type === 'step.started').map((e) => e.step);
+    const completedSteps = events.filter((e) => e.type === 'step.completed').map((e) => e.step);
+    check(
+      '六阶段都发出了 step.started，顺序与契约完全一致',
+      JSON.stringify(startedSteps) === JSON.stringify(STEP_ORDER),
+      startedSteps.join(' → '),
+    );
+    check(
+      '六阶段都发出了 step.completed，顺序与契约完全一致',
+      JSON.stringify(completedSteps) === JSON.stringify(STEP_ORDER),
+      completedSteps.join(' → '),
+    );
+    // ★ 回归断言：我们的链路顺序是 ranked → verified（先重排、后校验），
+    // 而契约要求 verifying → ranking（先校验、后重排）—— 两者是**交错**的。
+    // 不在流式层重排事件，前端进度条就会**倒退**，看起来像出 bug。
+    const startedAt = (phase) =>
+      events.findIndex((e) => e.type === 'step.started' && e.step === phase);
+    check(
+      '进度严格单调不倒退（verifying 必须先于 ranking 开始）',
+      startedAt('verifying') !== -1 &&
+        startedAt('ranking') !== -1 &&
+        startedAt('verifying') < startedAt('ranking'),
+      `verifying@${startedAt('verifying')} ｜ ranking@${startedAt('ranking')}`,
+    );
+
+    const done = events.at(-1);
+    check(
+      'run.completed 带 result / runId / persistence',
+      Boolean(done?.result) && typeof done?.persistence === 'string',
+      `persistence=${done?.persistence}`,
+    );
+    check(
+      '顶部 runId 是 uuid（契约是 z.string().uuid()）',
+      UUID_RE.test(done?.runId ?? ''),
+      `${done?.runId}`,
+    );
+    check(
+      'PersonSearchResult 恰好 12 个键',
+      keysOf(done?.result) ===
+        '["analyzedContentCount","background","cards","contextSourceCounts","contextStatus","fallbackReason","modeUsed","modelFallback","persistence","rejectedContentCount","runId","searchedQueries"]',
+      keysOf(done?.result),
+    );
+    check(
+      'cards 是 CreatorCard（最多 3 张，每张恰好 16 键）',
+      (done?.result?.cards ?? []).length <= 3 &&
+        (done?.result?.cards ?? []).every(
+          (c) =>
+            keysOf(c) ===
+            '["avatarTone","avatarUrl","evidence","headline","id","identityConfidence","initial","limitations","matchedDimensions","name","profileUrl","reason","relevanceLevel","role","score","suitableQuestions"]',
+        ),
+      `${done?.result?.cards?.length ?? 0} 张`,
+    );
+    check(
+      'searchedQueries 是数组（前端「背景资料」区要用）',
+      Array.isArray(done?.result?.searchedQueries),
+      (done?.result?.searchedQueries ?? []).join(' / '),
+    );
+
+    section('刷新恢复');
+    const restored = await getJson(`/api/agent/runs/${encodeURIComponent(done?.runId ?? 'x')}`);
+    check('能用刚拿到的 runId 取回结果', restored.status === 200, JSON.stringify(restored.body).slice(0, 160));
+    check(
+      'RunRestoreResponse 恰好 14 个键',
+      keysOf(restored.body) ===
+        '["analyzedCount","background","cards","contextSourceCounts","contextStatus","createdAt","expiresAt","fallbackReason","mode","modelFallback","persistence","rejectedCount","runId","searchedQueries"]',
+      keysOf(restored.body),
+    );
+    check(
+      'persistence 固定为 saved（能取回就说明当初存下来了）',
+      restored.body?.persistence === 'saved',
+      `persistence=${restored.body?.persistence}`,
+    );
+    check(
+      '恢复出来的卡片与首次搜索一致',
+      JSON.stringify(restored.body?.cards) === JSON.stringify(done?.result?.cards),
+      `${restored.body?.cards?.length ?? 0} 张 vs ${done?.result?.cards?.length ?? 0} 张`,
+    );
+    const ghostRun = await getJson('/api/agent/runs/00000000-0000-4000-8000-000000000000');
+    check(
+      '不存在的 run → 404 + RUN_NOT_FOUND（前端静默回 idle，不弹红条）',
+      ghostRun.status === 404 && ghostRun.body?.code === 'RUN_NOT_FOUND',
+      JSON.stringify(ghostRun.body),
+    );
+
+    section('三栏对比（原文侧 vs Agent 侧）');
+    const compareRes = await fetch(`${BASE}/api/compare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: '我在大厂做产品 7 年，收到一家 50 人 AI 创业公司的 offer，该不该去？',
+        sessionId: 'e2e',
+      }),
+      signal: AbortSignal.timeout(180000),
+    });
+    const compare = await compareRes.json();
+    check('/api/compare 返回 200', compareRes.status === 200, JSON.stringify(compare).slice(0, 160));
+    check(
+      'CompareResponse 恰好 5 个键',
+      keysOf(compare) === '["agent","contextStatus","modeUsed","modelFallback","raw"]',
+      keysOf(compare),
+    );
+    check(
+      '原文侧只有 1 个查询词（**不扩词**，这正是对比的意义）',
+      compare?.raw?.queries?.length === 1,
+      (compare?.raw?.queries ?? []).join(' / '),
+    );
+    check(
+      '原文侧有命中，且每条都收敛成窄形状',
+      (compare?.raw?.hits ?? []).length > 0,
+      `${compare?.raw?.hits?.length ?? 0} 条`,
+    );
+    const rawHit = compare?.raw?.hits?.[0];
+    check(
+      'SearchHitCard 恰好 12 个键',
+      keysOf(rawHit) ===
+        '["author","commentCount","contentId","contentType","editTime","excerpt","provider","rankingScore","sourceQuery","title","url","voteUpCount"]',
+      keysOf(rawHit),
+    );
+    check(
+      '内部的召回归因 / 精选评论 / 全文**没有**过线（映射是一道收窄边界）',
+      !('matchedBy' in (rawHit ?? {})) && !('comments' in (rawHit ?? {})) && !('contentText' in (rawHit ?? {})),
+    );
+    check(
+      'author 恰好 5 个键，且 id 是 p_ 前缀的稳定标识（与星图/人物卡一致）',
+      keysOf(rawHit?.author) === '["authorityLevel","avatarUrl","badgeText","name","syntheticId"]' &&
+        (rawHit?.author?.syntheticId ?? '').startsWith('p_'),
+      `${keysOf(rawHit?.author)} · ${rawHit?.author?.syntheticId}`,
+    );
+    check(
+      'Agent 侧带卡片与上下文状态',
+      (compare?.agent?.cards ?? []).length > 0 &&
+        ['applied', 'partial', 'unavailable'].includes(compare?.agent?.contextStatus),
+      `${compare?.agent?.cards?.length ?? 0} 张 · contextStatus=${compare?.agent?.contextStatus}`,
+    );
+
+
     section('核心链路：情境化问题应走「真人」');
+    // ⚠️ 链路断言打**旧路径** `/api/ask`：它仍然返回链路原始产物 `AskResult`
+    // （8 步 trace / route / metrics），而新路径返回的是映射后的 `PersonSearchResult`。
+    // 8 步链路是 e2e 与对照实验的共同基准，用原始产物验证它才准。
+    // 新路径的契约形状另有专门的断言（见「流式协议」一节）。
     const askStart = Date.now();
     const human = await postAsk(
       '我在大厂做产品 7 年，收到一家 50 人 AI 创业公司产品负责人的 offer，固定薪资降 20% 但有期权和管理机会，同时我在这里晋升已经放缓，该不该去？',
+      '/api/ask',
     );
     const askMs = Date.now() - askStart;
     check('返回 200', human.status === 200, human.body?.error ?? '');
@@ -576,7 +865,7 @@ async function main() {
     }
 
     section('「别问人」路径：通用知识问题不该导向真人');
-    const generic = await postAsk('什么是大模型上下文窗口，它的原理是什么？');
+    const generic = await postAsk('什么是大模型上下文窗口，它的原理是什么？', '/api/ask');
     check('返回 200', generic.status === 200, generic.body?.error ?? `HTTP ${generic.status}`);
     check(
       '路由不是 human',

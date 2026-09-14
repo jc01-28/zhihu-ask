@@ -263,6 +263,228 @@ export const FIELD_COLOR_TOKENS = [
 
 export type FieldColorToken = (typeof FIELD_COLOR_TOKENS)[number];
 
+/** ── 人物卡（CreatorCardData）────────────────────────────────────────────
+ *
+ * `GET /api/creators/:id` 与 `POST /api/agent/search` 的 `cards[]` **共用同一个形状** ——
+ * 前端两张入口（领域星图点人物、找人结果看详情）打开的是同一张名片。
+ *
+ * 前端 schema `.strict()`，**17 个字段一个不多一个不少**。
+ */
+
+/** 证据只能来自知乎公开内容或 Fixture；用户上下文与背景资料**不得**写入 */
+export type EvidenceKind = '亲身经历' | '专业分析' | '反面案例';
+
+export interface Evidence {
+  id: string;
+  title: string;
+  /** 最多 180 字 —— 前端卡片里是一行摘要 */
+  excerpt: string;
+  kind: EvidenceKind;
+  /** 时间线索。知乎没有结构化时间戳，所以这里是**字符串** */
+  publishedAt: string;
+  source: 'zhihu_search' | 'fixture';
+  /** 必须是 https 绝对地址或 null（前端直接塞进 <a href>） */
+  url: string | null;
+}
+
+/**
+ * 人物在本次场景中的角色。
+ *
+ * 前三项属于「问题找人」的检索角色；`领域相关` 属于「专业领域」入口 ——
+ * **领域目录只能说明「公开内容与议题相关」，不能说某人「经历最接近」**。
+ */
+export type CreatorRole = '经历最接近' | '关键维度' | '补充视角' | '领域相关';
+
+export type IdentityConfidence = 'high' | 'medium' | 'low';
+
+export type RelevanceLevel = '高度相关' | '部分相关' | '补充视角';
+
+export interface CreatorCard {
+  id: string;
+  name: string;
+  headline: string;
+  /** 头像占位字，最多 2 字 */
+  initial: string;
+  avatarTone: string;
+  avatarUrl: string | null;
+  /** 公开知乎主页地址，由后端给出；前端不按姓名拼接 */
+  profileUrl: string | null;
+  /**
+   * 身份可信度。看的是**证据结构**而不是粉丝量：
+   * 有几条第一人称的亲历证据、可否逐字回溯。
+   */
+  identityConfidence: IdentityConfidence;
+  role: CreatorRole;
+  relevanceLevel: RelevanceLevel;
+  /** 0~100（不是 0~1） */
+  score: number;
+  /** 匹配维度，最多 4 条、每条约 40 字 */
+  matchedDimensions: string[];
+  /** 推荐理由，最多 500 字 */
+  reason: string;
+  /**
+   * 最多 3 条。**允许为空**：领域来源的人物只有公开关联、没有可核验的内容证据。
+   * 空数组表示「暂无证据」，前端必须如实展示 —— **不许为凑满而虚构证据**。
+   */
+  evidence: Evidence[];
+  /** 适合继续追问的问题，最多 3 条 */
+  suitableQuestions: string[];
+  /** 局限：不适合回答什么，最多 4 条 */
+  limitations: string[];
+}
+
+/** ── 问题找人 ──────────────────────────────────────────────────────────── */
+
+export type DataMode = 'fixture' | 'live' | 'auto';
+
+/** `POST /api/agent/search` 的请求体。前端 `.strict()`：恰好三个键 */
+export interface SearchRequest {
+  /** 4~300 字，与后端 `handleAsk` 的校验口径一致 */
+  query: string;
+  sessionId: string;
+  mode?: DataMode;
+}
+
+/** 背景资料（热榜 / 全网搜索）。**永远不参与人物推荐** */
+export interface BackgroundDocument {
+  scope: 'background';
+  source: 'global_search' | 'hot_list';
+  title: string;
+  excerpt: string;
+  url: string;
+  thumbnailUrl: string | null;
+  publishedAt: number | null;
+}
+
+/** `GET /api/topics/hot` 的响应 */
+export interface HotTopicsResponse {
+  topics: BackgroundDocument[];
+  /** 热榜接口不可用时为 true —— 前端据此降级，而不是显示空列表 */
+  unavailable: boolean;
+}
+
+/** 用户上下文的可用状态：完整应用 / 部分应用 / 不可用 */
+export type ContextStatus = 'applied' | 'partial' | 'unavailable';
+
+export interface ContextSourceCounts {
+  creation: number;
+  followee: number;
+  collection: number;
+  favlist: number;
+}
+
+export type PersistenceStatus = 'saved' | 'unavailable';
+
+/**
+ * `POST /api/agent/search` 的 `run.completed` 载荷。**12 个字段**。
+ *
+ * 它刻意比 `AskResult` 更「产品化」：前端要的是「这几张卡 + 这次搜索的元信息」，
+ * 而不是我们的 8 步 trace。映射在 `back/domain/creator-card.ts` 完成。
+ */
+export interface PersonSearchResult {
+  cards: CreatorCard[];
+  modeUsed: 'live' | 'fixture';
+  /** 降级原因（数据源或模型降级时说明），无降级为 null */
+  fallbackReason: string | null;
+  modelFallback: boolean;
+  contextStatus: ContextStatus;
+  contextSourceCounts: ContextSourceCounts;
+  /** 本次实际用到的检索词，前端「背景资料」区会显示 */
+  searchedQueries: string[];
+  background: BackgroundDocument[];
+  analyzedContentCount: number;
+  rejectedContentCount: number;
+  /** **必须是 uuid**，否则前端 schema 整条拒掉 */
+  runId: string | null;
+  persistence: PersistenceStatus;
+}
+
+/** `GET /api/agent/runs/:runId` 的响应：刷新页面后取回一次已完成的搜索 */
+export interface RunRestoreResponse {
+  runId: string;
+  cards: CreatorCard[];
+  mode: 'live' | 'fixture';
+  contextStatus: ContextStatus;
+  analyzedCount: number;
+  rejectedCount: number;
+  fallbackReason: string | null;
+  modelFallback: boolean;
+  contextSourceCounts: ContextSourceCounts;
+  searchedQueries: string[];
+  background: BackgroundDocument[];
+  /** 能取回就说明当初存下来了，因此**不接受 `unavailable`** */
+  persistence: 'saved';
+  createdAt: number;
+  expiresAt: number;
+}
+
+/** `POST /api/compare` 的响应：原文侧 vs Agent 侧的三栏对比 */
+export interface CompareResponse {
+  modeUsed: 'live' | 'fixture';
+  modelFallback: boolean;
+  contextStatus: ContextStatus;
+  raw: {
+    queries: string[];
+    hits: SearchHitCard[];
+  };
+  agent: PersonSearchResult;
+}
+
+/** 对比用的命中条目。**字段比内部 SearchHit 更窄**，是给界面看的 */
+export interface SearchHitCard {
+  contentId: string;
+  contentType: 'Answer' | 'Article' | 'Question' | 'Other';
+  title: string;
+  excerpt: string;
+  url: string;
+  commentCount: number;
+  voteUpCount: number;
+  editTime: number;
+  rankingScore: number;
+  author: {
+    syntheticId: string;
+    name: string;
+    avatarUrl: string | null;
+    badgeText: string | null;
+    authorityLevel: 1 | 2 | 3 | 4;
+  };
+  sourceQuery: string;
+  provider: 'zhihu_search' | 'fixture';
+}
+
+/** ── 流式事件（NDJSON）───────────────────────────────────────────────────
+ *
+ * `POST /api/agent/search` 与 `/api/conversations/:id/agent-runs` 都用这一套。
+ * 事件顺序固定：`run.started` → 六阶段各 `started`/`completed` → `run.completed`。
+ */
+
+/** 一个搜索批次内允许的步数上限（防前端拿到无限进度） */
+export const AGENT_STEP_ORDER = [
+  'loading_context',
+  'understanding',
+  'retrieving',
+  'verifying',
+  'ranking',
+  'saving',
+] as const satisfies readonly AgentPhaseId[];
+
+export type SearchAgentEvent =
+  | { type: 'run.started'; requestId: string }
+  | {
+      type: 'step.started' | 'step.completed';
+      step: AgentPhaseId;
+      message: string;
+      meta?: Record<string, string | number | boolean | null>;
+    }
+  | {
+      type: 'run.completed';
+      result: PersonSearchResult;
+      runId: string | null;
+      persistence: PersistenceStatus;
+    }
+  | { type: 'run.failed'; error: ApiErrorEnvelope };
+
+
 
 
 /** ── 端点与信封 ──────────────────────────────────────────────────────── */
@@ -280,16 +502,28 @@ export const API_ROUTES = {
   logout: '/api/auth/zhihu/logout',
 
   /** ── 业务域 ── */
-  /** 问题找人（一次返回）。规格里叫 /api/agent/search，后续会升级为 NDJSON 流式 */
+  /** 问题找人（NDJSON 流式） */
   agentSearch: '/api/agent/search',
+  /** 刷新后恢复上一次搜索结果 */
+  agentRuns: '/api/agent/runs',
+  /** 三栏对比（原文侧 vs Agent 侧） */
+  compare: '/api/compare',
+  /** 热榜选题。**只作提问参考，不参与人物推荐** */
+  hotTopics: '/api/topics/hot',
   /** @deprecated 旧路径，保留兼容；新代码请用 agentSearch */
   ask: '/api/ask',
 
   /** ── 领域域（专业领域社交）── */
   /** 推荐领域列表 */
   fieldsFeatured: '/api/fields/featured',
-  /** 领域搜索：`?query=训练大模型&limit=12` */
+  /** 领域检索：`?query=训练大模型&limit=12` */
   fields: '/api/fields',
+  /** 人物公开资料。星图与找人**共用这一个出口** */
+  creators: '/api/creators',
+
+  /** ── 会话与咨询 ── */
+  conversations: '/api/conversations',
+  consultationPackages: '/api/consultation/packages',
 
   /** ── 系统 ── */
   health: '/api/health',
@@ -299,6 +533,18 @@ export const API_ROUTES = {
 /** 领域星图路径。带路径参数，所以是函数而不是常量 */
 export const fieldGraphPath = (fieldId: string): string =>
   `${API_ROUTES.fields}/${encodeURIComponent(fieldId)}/graph`;
+
+/** 人物公开资料路径 */
+export const creatorPath = (creatorId: string): string =>
+  `${API_ROUTES.creators}/${encodeURIComponent(creatorId)}`;
+
+/** 搜索结果恢复路径 */
+export const runPath = (runId: string): string =>
+  `${API_ROUTES.agentRuns}/${encodeURIComponent(runId)}`;
+
+/** 会话路径族 */
+export const conversationPath = (id: string): string =>
+  `${API_ROUTES.conversations}/${encodeURIComponent(id)}`;
 
 /**
  * 公开用户视图。

@@ -90,7 +90,13 @@ async function loadCorpus(): Promise<SearchHit[]> {
 }
 
 /** 拿到 7 个领域的索引（带缓存） */
-async function loadIndexes(): Promise<FieldIndex[]> {
+/**
+ * 拿到 7 个领域的索引（带缓存）。
+ *
+ * **导出**给 `handlers/creators.ts` 复用：人物名片必须在**同一份索引**上找人，
+ * 否则星图给出的 personId 可能在名片接口里查不到。
+ */
+export async function loadFieldIndexes(): Promise<FieldIndex[]> {
   const namespace = cacheNamespace();
   if (
     indexCache &&
@@ -125,7 +131,7 @@ async function loadIndexes(): Promise<FieldIndex[]> {
  * `topics` 与 `people` 各至少 1 个 —— 与其让用户撞一个错误页，不如不进推荐列表。
  */
 export async function handleFeaturedFields(): Promise<HandlerResult> {
-  const indexes = await loadIndexes();
+  const indexes = await loadFieldIndexes();
   const body: FieldListResponse = {
     items: indexes
       .filter((index) => index.people.length > 0 && index.topicMembers.size > 0)
@@ -153,7 +159,7 @@ export async function handleSearchFields(input: FieldSearchInput): Promise<Handl
     );
   }
 
-  const indexes = await loadIndexes();
+  const indexes = await loadFieldIndexes();
   const all = searchFields(indexes, query);
 
   // limit 来自查询串，可能是 'abc' 或负数 —— NaN 会让 slice 返回空数组，
@@ -181,7 +187,7 @@ export async function handleFieldGraph(fieldId: string): Promise<HandlerResult> 
     );
   }
 
-  const indexes = await loadIndexes();
+  const indexes = await loadFieldIndexes();
   const index = indexes.find((i) => i.field.id === fieldId);
   if (!index) {
     // 理论上不会发生（索引是按 FIELD_SEEDS 建的），兜底避免 500

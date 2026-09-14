@@ -367,6 +367,75 @@ async function main() {
       JSON.stringify(notFound.body),
     );
 
+    section('人物公开资料（星图与找人共用出口）');
+    const samplePersonId = people[0]?.id;
+    check('已从星图取到一个 personId 用于验证', Boolean(samplePersonId), samplePersonId ?? '(空)');
+
+    const creator = await getJson(`/api/creators/${encodeURIComponent(samplePersonId ?? 'x')}`);
+    const card = creator.body;
+    check('/api/creators/:id 返回 200', creator.status === 200, JSON.stringify(card).slice(0, 200));
+    // 前端 schema 是 .strict()：**恰好这 16 个字段**
+    check(
+      'CreatorCard 恰好 16 个键',
+      keysOf(card) ===
+        '["avatarTone","avatarUrl","evidence","headline","id","identityConfidence","initial","limitations","matchedDimensions","name","profileUrl","reason","relevanceLevel","role","score","suitableQuestions"]',
+      keysOf(card),
+    );
+    check(
+      '领域来源的人物 role 是「领域相关」（不能说「经历最接近」）',
+      card?.role === '领域相关',
+      `role=${card?.role}`,
+    );
+    check(
+      '领域来源**没有内容证据**，如实给空数组（不许为凑满而虚构）',
+      Array.isArray(card?.evidence) && card.evidence.length === 0,
+      `evidence=${card?.evidence?.length ?? '(非数组)'} 条`,
+    );
+    check(
+      'score 是 0~100，与星图里的 relevance 一致',
+      typeof card?.score === 'number' &&
+        card.score >= 0 &&
+        card.score <= 100 &&
+        card.score === people[0]?.relevance,
+      `名片 ${card?.score} vs 星图 ${people[0]?.relevance}`,
+    );
+    check(
+      'matchedDimensions 来自关联议题（最多 4 条）',
+      Array.isArray(card?.matchedDimensions) && card.matchedDimensions.length <= 4,
+      (card?.matchedDimensions ?? []).join(' / '),
+    );
+    check(
+      'avatarUrl / profileUrl 是 https 或 null（前端直接塞进 img/a）',
+      [card?.avatarUrl, card?.profileUrl].every(
+        (u) => u === null || (typeof u === 'string' && u.startsWith('https://')),
+      ),
+      `avatar=${card?.avatarUrl} profile=${card?.profileUrl}`,
+    );
+    const ghost = await getJson('/api/creators/p_does_not_exist');
+    check(
+      '不存在的创作者返回 404 + NOT_FOUND（前端保留页面上下文，不弹回首页）',
+      ghost.status === 404 && ghost.body?.code === 'NOT_FOUND',
+      JSON.stringify(ghost.body),
+    );
+
+    section('热榜选题');
+    const hot = await getJson('/api/topics/hot');
+    check('/api/topics/hot 返回 200', hot.status === 200);
+    check(
+      '响应恰好 { topics, unavailable } 两个键',
+      keysOf(hot.body) === '["topics","unavailable"]',
+      keysOf(hot.body),
+    );
+    check(
+      'unavailable 是布尔（拿不到时前端隐藏热榜区，而不是弹红条）',
+      typeof hot.body?.unavailable === 'boolean',
+      `unavailable=${hot.body?.unavailable} · ${hot.body?.topics?.length ?? 0} 条`,
+    );
+    check(
+      '每条热榜都带 https 地址（坏链接会被丢弃而不是发出去）',
+      (hot.body?.topics ?? []).every((t) => typeof t.url === 'string' && t.url.startsWith('https://')),
+    );
+
     section('核心链路：情境化问题应走「真人」');
     const askStart = Date.now();
     const human = await postAsk(

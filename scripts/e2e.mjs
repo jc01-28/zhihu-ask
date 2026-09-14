@@ -60,13 +60,13 @@ async function getJson(pathname, init) {
 }
 
 /**
- * 带超时的 POST /api/ask。
+ * 带超时的 POST。默认打**新路径** `/api/agent/search`（前端规格的命名）。
  * 显式设超时是必须的：一旦被测服务因为外部依赖挂住，我们要得到一个**命名的失败用例**，
  * 而不是让整个测试脚本崩掉、把后面的用例也一起吞掉。
  */
-async function postAsk(question, timeoutMs = 180000) {
+async function postAsk(question, pathname = '/api/agent/search', timeoutMs = 180000) {
   try {
-    const res = await fetch(`${BASE}/api/ask`, {
+    const res = await fetch(`${BASE}${pathname}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question }),
@@ -198,48 +198,121 @@ async function main() {
       );
     }
 
-    section('凭证自查');
-    const status = await getJson('/api/oauth/status');
-    check('oauth/status 返回 200', status.status === 200);
+    section('登录状态（授权域新口径）');
+    const status = await getJson('/api/auth/session');
+    check('/api/auth/session 返回 200', status.status === 200);
     const statusData = status.body?.data;
+    // 前端三分支全靠这两个平级布尔，所以它们必须存在且是 boolean
     check(
-      'credentials 字段存在且能列出缺失项',
-      Array.isArray(statusData?.credentials?.missing),
-      `missing=${JSON.stringify(statusData?.credentials?.missing)}`,
+      'configured 是布尔（凭证是否配齐）',
+      typeof statusData?.configured === 'boolean',
+      `configured=${statusData?.configured}`,
     );
-    check('未授权时 authorized 为 false', statusData?.authorized === false);
-
-    section('OAuth 入口的防御');
-    // 回调地址还是占位符/本地地址 && Access Secret 缺失时，应给出可执行的报错而不是 500 裸奔
-    const authz = await getJson('/api/oauth/authorize', { redirect: 'manual' });
-    const refused =
-      authz.status === 400 ||
-      authz.status === 500 ||
-      (authz.status >= 300 && authz.status < 400);
     check(
-      'authorize 要么给出结构化报错、要么正常跳转，不会静默失败',
-      refused,
-      `HTTP ${authz.status}${authz.body?.error ? ` · ${authz.body.error}` : ''}`,
+      'authenticated 是布尔（是否已授权）',
+      typeof statusData?.authenticated === 'boolean',
+      `authenticated=${statusData?.authenticated}`,
     );
-    if (authz.body?.missing) {
-      check(
-        '缺失凭证时明确指出缺哪几个',
-        Array.isArray(authz.body.missing) && authz.body.missing.length > 0,
-        authz.body.missing.join('；'),
-      );
-    }
+    check(
+      'missing 是数组（缺哪些凭证直接可读）',
+      Array.isArray(statusData?.missing),
+      `missing=${JSON.stringify(statusData?.missing)}`,
+    );
+    check('未授权时 authenticated 为 false', statusData?.authenticated === false);
 
-    section('输入校验');
+    section('授权入口的防御');
+    // 凭证没配齐 / 回调地址是占位符时，不该 500 裸奔，而应 302 回 /app 带错误码
+    const authz = await getJson('/api/auth/zhihu/login', { redirect: 'manual' });
+    const isRedirect = authz.status >= 300 && authz.status < 400;
+    const location = authz.headers?.get?.('location') ?? '';
+    check(
+      'login 要么跳知乎、要么带错误码回 /app，不会静默失败',
+      isRedirect,
+      `HTTP ${authz.status} → ${location}`,
+    );
+    // 这个环境回调地址是占位符，所以应当回 unconfigured 而不是跳到知乎
+    check(
+      '回调地址不可用时回到 /app?auth=unconfigured',
+      location.includes('auth=unconfigured') || location.includes('openapi.zhihu.com'),
+      location || '(无 Location)',
+    );
+
+    section('输入校验（4~300 字，与前端规格一致）');
     const tooShort = await postAsk('太短');
     check('过短问题被拒（400）', tooShort.status === 400, tooShort.body?.error ?? '');
     const tooLong = await postAsk('测'.repeat(1200));
     check('超长问题被拒（400）', tooLong.status === 400, tooLong.body?.error ?? '');
-    const badJson = await fetch(`${BASE}/api/ask`, {
+    const badJson = await fetch(`${BASE}/api/agent/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{not json',
     });
     check('非法 JSON 被拒（400）', badJson.status === 400);
+
+    section('端点迁移：新路径可用，旧路径仍兼容');
+    const legacy = await postAsk('我在大厂做产品 7 年，该不该去创业公司？', '/api/ask');
+    check(
+      '废弃路径 /api/ask 仍返回 200（兼容旧脚本）',
+      legacy.status === 200,
+      `HTTP ${legacy.status}`,
+    );
+
+    section('领域域（专业领域社交）');
+    const featured = await getJson('/api/fields/featured');
+    const featuredFields = featured.body?.data ?? [];
+    check(
+      '推荐领域返回 7 个，且顺序是定义顺序',
+      featuredFields.length === 7 && featuredFields[0]?.id === 'agent-dev',
+      featuredFields.map((f) => f.name).join(' / '),
+    );
+    check(
+      '每个领域都挂到了真实人物（不是空壳）',
+      featuredFields.every((f) => f.memberCount > 0 && f.topicCount > 0),
+      featuredFields.map((f) => `${f.name}:${f.memberCount}人`).join(' ｜ '),
+    );
+
+    const fieldSearch = await getJson(`/api/fields?query=${encodeURIComponent('训练大模型')}`);
+    check(
+      '领域搜索命中相关领域',
+      (fieldSearch.body?.data?.total ?? 0) > 0,
+      (fieldSearch.body?.data?.fields ?? []).map((f) => f.name).join(' / '),
+    );
+    check(
+      '领域搜索只返回领域、不返回人物（两个功能的边界）',
+      !JSON.stringify(fieldSearch.body?.data ?? {}).includes('"people"'),
+    );
+    // 回归断言：曾经因为给每个领域无条件叠加「人数加权」，
+    // 任何查询都返回全部 7 个领域 —— 连不存在的词也一样。
+    check(
+      '无意义查询返回 0 个领域',
+      (await getJson(`/api/fields?query=${encodeURIComponent('不存在的领域xyz')}`)).body?.data
+        ?.total === 0,
+    );
+    check('领域搜索缺 query 返回 400', (await getJson('/api/fields')).status === 400);
+
+    const graph = await getJson('/api/fields/agent-dev/graph');
+    const graphData = graph.body?.data;
+    const nodes = [...(graphData?.topics ?? []), ...(graphData?.people ?? [])];
+    check(
+      '星图同时返回议题与人物，且坐标都在 0~1000 画布内',
+      (graphData?.topics?.length ?? 0) > 0 &&
+        (graphData?.people?.length ?? 0) > 0 &&
+        nodes.every(
+          (n) =>
+            n.position?.x >= 0 &&
+            n.position?.x <= 1000 &&
+            n.position?.y >= 0 &&
+            n.position?.y <= 1000,
+        ),
+      `${graphData?.topics?.length} 议题 / ${graphData?.people?.length} 人`,
+    );
+    check(
+      '人物头像三要素齐全（initial / avatarTone / relevance）',
+      (graphData?.people ?? []).every(
+        (p) => p.initial && p.avatarTone && typeof p.relevance === 'number',
+      ),
+    );
+    check('未知领域返回 404', (await getJson('/api/fields/no-such-field/graph')).status === 404);
 
     section('核心链路：情境化问题应走「真人」');
     const askStart = Date.now();
@@ -271,6 +344,21 @@ async function main() {
         '每一步都带产物摘要（链路可见）',
         result.trace?.every((t) => typeof t.summary === 'string'),
         result.trace?.map((t) => `${t.step}=${t.summary}`).join(' ｜ '),
+      );
+
+      // 六阶段是前端规格要的展示口径，由 handler 从 8 步 trace 映射而来。
+      // 它必须**始终**是 6 条且带 label —— 前端直接用，不自己聚合。
+      check(
+        'phases 是 6 阶段（前端展示口径）',
+        Array.isArray(result.phases) &&
+          result.phases.length === 6 &&
+          result.phases.every((p) => typeof p.label === 'string' && p.label.length > 0),
+        result.phases?.map((p) => `${p.label}:${p.status}`).join(' → '),
+      );
+      check(
+        '六阶段覆盖到 8 步的产出（不是空壳）',
+        result.phases?.some((p) => p.summary && p.summary.length > 0),
+        result.phases?.map((p) => p.summary || '—').join(' ｜ '),
       );
       // 各步耗时：maxDuration 超限时，一眼能看出是谁慢
       const slowest = [...(result.trace ?? [])].sort((a, b) => b.ms - a.ms)[0];

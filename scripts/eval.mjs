@@ -105,7 +105,7 @@ async function ask(question, experiment) {
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const startedAt = Date.now();
   try {
-    const res = await fetch(`${BASE}/api/ask`, {
+    const res = await fetch(`${BASE}/api/agent/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, experiment }),

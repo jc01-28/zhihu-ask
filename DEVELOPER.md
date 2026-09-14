@@ -153,6 +153,69 @@ front ──┘
 `back` 内部：`handlers → steps → domain / framework`；`adapters` 由装配根注入。
 **没有反向依赖，也没有循环依赖。**
 
+### 路由地图（2026-09-14 按前端规格对齐）
+
+页面（规格的 7 页 + 1 个公共模块，已落地 3 页）：
+
+| 路由 | 页面 | 依赖的后端 | 状态 |
+|---|---|---|---|
+| `/` | 项目推荐页 | **零后端** | ✅ `ProjectIntroPage` |
+| `/app` | 授权门 + 功能首页 | `GET /api/auth/session` | ✅ `AppHomePage` |
+| `/app/find` | 问题找人 | `POST /api/agent/search` | ✅ `FindPage` |
+| `/app/fields` | 领域目录 | `GET /api/fields/featured`、`GET /api/fields?query=` | 后端 ✅ ｜ 前端待队友 |
+| `/app/fields/:fieldId` | 领域星图 | `GET /api/fields/:id/graph` | 后端 ✅ ｜ 前端待队友 |
+| `/app/chat/:conversationId` | 虚拟私聊 | `/api/conversations/*` | ⬜ 待建（P5） |
+| — | 人物名片抽屉（公共） | `GET /api/people/:id` | ⬜ 待建（P6） |
+
+接口：
+
+| 端点 | 状态 | 说明 |
+|---|---|---|
+| `GET /api/auth/session` | ✅ | `configured` / `authenticated` / `user`，前端三分支全靠它 |
+| `GET /api/auth/zhihu/login` | ✅ | 302 到知乎授权页（整页跳转，不是 fetch） |
+| `GET /api/auth/zhihu/callback` | ✅ | 302 回 `/app?auth=成功或错误码` |
+| `GET\|POST /api/auth/zhihu/logout` | ✅ | 清会话后 302 回 `/app?auth=required` |
+| `POST /api/agent/search` | ✅ | 问题找人。**当前一次性返回**，不是规格里写的 NDJSON 流式 |
+| `GET /api/fields/featured` | ✅ | 推荐领域（7 个，顺序即定义顺序） |
+| `GET /api/fields?query=&limit=` | ✅ | 领域搜索。**只返回领域，不返回人物** |
+| `GET /api/fields/:fieldId/graph` | ✅ | 星图。议题与人物**都带后端算好的坐标** |
+| `GET /api/health` | ✅ | 含 `corpus` 构成，演示前先看它 |
+| `GET /api/image-proxy` | ✅ | 头像同源代理 |
+| `/api/ask`、`/api/oauth/*` | 🟡 废弃别名 | 仅为兼容旧脚本，新代码不要用 |
+
+**领域域的坐标系**：`0~1000` 的正方形画布，中心 `(500,500)` 是领域中心节点。
+议题在半径 300 的圆上均匀分布，人物挂在各自**主要议题**的外圈（角度与半径带确定性抖动）。
+前端等比缩放到容器即可，**不需要自己算布局**；刷新页面位置不变，演示时这点很重要。
+
+⚠️ **领域域只认真实语料**（`enumerateRealCorpus`，无视 `FIXTURE_CORPUS`）。
+它展示的是「谁**真的**写过这个话题」—— 一旦混进合成语料里的虚构作者
+（「林一舟」那种），产品内核就废了，而且演示时没人能当场分辨哪个名字是编的。
+
+授权错误码共 8 个（含 `success`），定义在 `shared/contract.ts` 的 `AuthErrorCode`。
+前端的文案映射表写成 `Record<AuthErrorCode | 'success', ...>` —— **漏一个 tsc 就会报错**，
+这是刻意的：错误码加了却没人处理，比编译失败更糟。
+
+⚠️ **`configured` 的语义包含回调地址可用性**：即使三个凭证都在，只要
+`ZHIHU_REDIRECT_URI` 是占位符或本地地址，`configured` 就是 `false`。
+否则会出现「按钮能点、点下去必然失败」这种最招人烦的体验。
+
+### 文件分级管理（四层，别混）
+
+| 层级 | 位置 | 发布？ | 放什么 |
+|---|---|---|---|
+| **发布层** | `src/`、`scripts/`、`README/DEVELOPER/AGENT.md`、`.env.example`、`eval/` | ✅ 进仓库 | 产品代码、可复现的评测脚本与报告 |
+| **内部层** | `internal/` | ❌ gitignore | 进度排期、交接说明、缺口盘点、前端规格等团队内部资料 |
+| **运行时层** | `.cache/`、`.artifacts/`、`.next/`、`node_modules/` | ❌ gitignore | 可再生的缓存与产物 |
+| **机密层** | `.env`、`.env.local` | ❌ gitignore | 凭证。永远不要提交，也不要在日志里打印 |
+
+新增资料时按这个顺序判断：**给评委/公众看 → 发布层；给队友看 → `internal/`；可再生成 → 运行时层。**
+
+⚠️ 两个反直觉的点：
+1. `src/back/fixtures/*.json` 是**输入语料**，不是运行时产物 —— 必须提交，
+   否则别人 clone 下来跑不出 `eval/report.md` 里的数字。所以**不要**加 `*.json` 之类的通配忽略。
+2. `internal/` 是目录级忽略，所以在里面**新建任何文件都不需要改 `.gitignore`**。
+   这比文件级忽略安全：不会因为漏加一条规则把内部资料推到公开仓库。
+
 ---
 
 ## 2. 契约层：数据流与类型

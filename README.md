@@ -337,23 +337,46 @@ src/
 │   └── api-client.ts     前端唯一的请求出口
 │
 └── shared/     ★ 前后端唯一交接点
-    └── contract.ts       端点常量 + 统一信封 + 所有「过线」的类型
+    └── contract.ts       端点常量 + 所有「过线」的类型
 ```
+
+> 注意：`framework/params.ts` 里的 `pageLimit()` 是唯一允许的「查询串数字解析」。
+> 别用 `Number(x)` —— `Number(null) === 0` 是合法数字，缺省会被夹成 1，
+> 表现成「列表只返回一条」这种极难联想到的症状（消息列表真踩过）。
 
 依赖方向是单向的：`back → shared ← front`。`front/` 不允许 `import @/back/*`，
 也不允许直接 `fetch` —— 只能走 `api-client` + `contract`。这样后端重构时前端零改动。
 
 ### API
 
+响应形状由**前端契约**决定，不是我们自选的：成功时**响应体就是载荷本身**，
+失败时是 `{ code, message, retryable, details? }`。前端用 zod `.strict()` 校验，
+**多一个字段整条响应就会作废**，而后端日志不会有任何异常 —— 所以改字段必须两处一起改。
+
+两个端点是 **NDJSON 流式**（一行一个事件，写完立刻推）：
+
 | 端点 | 说明 |
 |---|---|
-| `POST /api/agent/search` | 问题找人。返回 8 步 trace + **六阶段进度** |
+| `POST /api/agent/search` | 问题找人，**流式**。六阶段进度 + 8 步 trace |
+| `GET /api/agent/runs/:runId` | 刷新后恢复上一次搜索结果 |
+| `POST /api/compare` | 三栏对比：原文检索 vs Agent 结果 |
 | `GET /api/fields/featured` | 推荐领域（7 个） |
 | `GET /api/fields?query=&limit=` | 领域搜索 —— **只返回领域，不返回人物** |
-| `GET /api/fields/:id/graph` | 领域星图。议题与人物**都带后端算好的坐标** |
+| `GET /api/fields/:id/graph` | 领域星图。议题与人物**都带后端算好的坐标**（0~1 归一化） |
+| `GET /api/creators/:creatorId` | 人物公开资料。星图与找人**共用这一个出口** |
+| `GET /api/topics/hot` | 热榜选题。**只作提问参考，不参与人物推荐** |
 | `GET /api/auth/session` | 登录状态：`configured` / `authenticated` / `user` |
 | `GET /api/auth/zhihu/login` · `/callback` · `/logout` | 知乎 OAuth 全流程 |
+| `POST /api/conversations` | 创建或幂等恢复会话（200 命中 / 201 新建） |
+| `GET /api/conversations/:id` | 读取会话 |
+| `GET /api/conversations/:id/messages` | 消息列表（游标分页） |
+| `POST /api/conversations/:id/messages` | 发消息，**按 `clientMessageId` 幂等** |
+| `POST /api/conversations/:id/agent-runs` | 会话内 Agent，**流式** |
+| `POST /api/conversations/:id/reset` | 重置会话（id 不变） |
+| `POST /api/conversations/:id/consultation/actions` | 咨询状态机（**模拟支付**） |
+| `GET /api/consultation/packages` | 咨询套餐（金额单位是人民币**分**） |
 | `GET /api/health` | 能力自检（含当前在跑哪份语料） |
+| `POST /api/ask` | **已废弃**，仅为兼容既有脚本保留 |
 
 ---
 

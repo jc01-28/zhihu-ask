@@ -92,3 +92,4 @@ Thumbs.db
 
 # 工具写权限探针，非工程文件
 .write-probe
+.pages-deploy/

@@ -15,7 +15,6 @@ import { PaymentDialog } from "@/front/features/consultation/PaymentDialog";
 import { PrivateAgentPanel } from "@/front/features/private-agent/PrivateAgentPanel";
 import { buildPrivateAgentView } from "@/front/features/private-agent/private-agent-state";
 import { CreatorAvatar } from "@/front/features/creator/CreatorCard";
-import { AuthGate } from "@/front/features/auth/AuthGate";
 import { NotFoundPage } from "@/front/pages/NotFoundPage";
 
 function ChatSkeleton() {
@@ -65,13 +64,32 @@ export function ChatPage() {
 
   if (conversation.loadStatus === "loading") return <ChatSkeleton />;
 
-  // 401：受保护页面统一回到授权门禁，不在聊天页各自处理。
+  /**
+   * 401：会话凭证失效。
+   *
+   * 演示环境（zhihu-wenren.vercel.app）已取消登录门槛（见 RequireAuth 的 DEMO_BYPASS_AUTH），
+   * 所以这里不该再把用户推回授权门禁 —— 那会让「能看就行」的访客卡死在登录页。
+   * 改成普通错误面板，文案保留原句以便用户理解发生了什么，同时给出重试与返回两条出路。
+   */
   if (conversation.loadError?.status === 401) {
     return (
-      <AuthGate
-        session={{ configured: true, authenticated: false, user: null }}
-        message="登录状态已失效，请重新使用知乎账号授权。"
-      />
+      <main className="grid min-h-screen place-items-center bg-background px-4 text-foreground">
+        <div role="alert" className="max-w-md rounded-2xl border border-amber-300 bg-amber-50 p-6 text-center">
+          <h1 className="text-xl font-bold text-amber-900">会话凭证已失效</h1>
+          <p className="mt-2 text-sm leading-6 text-amber-800">
+            登录状态已失效，请重新使用知乎账号授权。
+            也可以直接返回，用访客身份新建一次咨询。
+          </p>
+          <div className="mt-4 flex justify-center gap-2">
+            <Button onClick={conversation.reload}>
+              <RotateCcw /> 重试
+            </Button>
+            <Button variant="outline" onClick={goBack}>
+              返回上一页
+            </Button>
+          </div>
+        </div>
+      </main>
     );
   }
 

@@ -16,8 +16,11 @@ export function PortalPage({ session }: { session: AuthSessionView }) {
 
       <div className="mx-auto max-w-[1200px] px-4 py-10 sm:px-6 sm:py-14">
         <section className="card-enter">
+          {/* 如实反映登录状态：未登录时不写「登录成功」，避免误导 */}
           <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
-            登录成功 · {session.user?.displayName ?? "知乎账号已授权"}
+            {session.authenticated
+              ? `登录成功 · ${session.user?.displayName ?? "知乎账号已授权"}`
+              : "访客模式 · 全部功能可直接体验"}
           </Badge>
           <h1 className="mt-4 text-3xl font-black tracking-[-0.02em] sm:text-4xl">
             你想怎么开始？

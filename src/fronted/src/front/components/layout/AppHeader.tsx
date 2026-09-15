@@ -1,11 +1,11 @@
-import { Compass, House, LogOut, Search, ShieldCheck } from "lucide-react";
+import { Compass, House, LogIn, LogOut, Search, ShieldCheck, UserRound } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 
 import { Badge } from "@/front/components/ui/badge";
 import { Button } from "@/front/components/ui/button";
 import { cn } from "@/front/shared/cn";
 import type { AuthSessionView } from "@/shared/contracts/auth";
-import { AUTH_LOGOUT_PATH } from "@/shared/contracts/auth";
+import { AUTH_LOGIN_PATH, AUTH_LOGOUT_PATH } from "@/shared/contracts/auth";
 
 const NAV_ITEMS = [
   { to: "/app", label: "功能首页", icon: House, end: true },
@@ -57,17 +57,40 @@ export function AppHeader({ session }: { session: AuthSessionView }) {
         </nav>
 
         <div className="flex shrink-0 items-center gap-2">
-          <Badge
-            variant="outline"
-            className="hidden border-emerald-200 bg-emerald-50 text-emerald-700 sm:inline-flex"
-          >
-            <ShieldCheck /> {session.user?.displayName ?? "知乎账号已授权"}
-          </Badge>
-          <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
-            <a href={AUTH_LOGOUT_PATH}>
-              <LogOut /> 退出
-            </a>
-          </Button>
+          {/*
+            如实反映登录状态：未登录时显示「访客」，不假装已授权。
+            演示模式下访客可直接使用全部功能，所以这里也不提供「退出」按钮
+            （没登录过，点了只会跳回入口，反而让人困惑）。
+          */}
+          {session.authenticated ? (
+            <>
+              <Badge
+                variant="outline"
+                className="hidden border-emerald-200 bg-emerald-50 text-emerald-700 sm:inline-flex"
+              >
+                <ShieldCheck /> {session.user?.displayName ?? "知乎账号已授权"}
+              </Badge>
+              <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
+                <a href={AUTH_LOGOUT_PATH}>
+                  <LogOut /> 退出
+                </a>
+              </Button>
+            </>
+          ) : (
+            <>
+              <Badge
+                variant="outline"
+                className="hidden border-slate-200 bg-slate-50 text-slate-600 sm:inline-flex"
+              >
+                <UserRound /> 访客
+              </Badge>
+              <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
+                <a href={AUTH_LOGIN_PATH}>
+                  <LogIn /> 登录
+                </a>
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </header>
